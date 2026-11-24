@@ -15,6 +15,8 @@
 package googlecontrolplaneextension
 
 import (
+	"go.opentelemetry.io/otel/metric"
+
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 )
 
@@ -70,21 +72,42 @@ type PolicySetState struct {
 	Revision string
 }
 
-// registrySource is the production PolicyStateSource, backed by the process
-// wide policy registry in pkg/googlepolicy. All coupling to the policy engine
-// is confined to this type.
+// xdsMetricsBinder receives the MeterProvider that the xDS client records its
+// own metrics on.
+//
+// The xDS client is created by the config provider, before the collector has a
+// MeterProvider, so the provider is handed over once this extension starts.
+//
+// This is deliberately not part of PolicyStateSource. That interface is
+// read-only, and this is the one thing the extension pushes the other way.
+type xdsMetricsBinder interface {
+	// BindXDSMeterProvider sets the MeterProvider for the xDS client metrics.
+	// A nil MeterProvider unbinds the current one.
+	BindXDSMeterProvider(mp metric.MeterProvider)
+}
+
+// registrySource is the production PolicyStateSource and xdsMetricsBinder,
+// backed by the process wide state in pkg/googlepolicy. All coupling to the
+// policy engine is confined to this type.
 type registrySource struct{}
 
-var _ PolicyStateSource = registrySource{}
+var (
+	_ PolicyStateSource = registrySource{}
+	_ xdsMetricsBinder  = registrySource{}
+)
 
-// ActivePolicySet treats a policy set with no policies the same as no policy
-// set. Both managers activate such a set with a non-empty revision: the file
-// manager for an empty policy directory, and the xDS manager when the control
-// plane sends an empty revision to clear all policies. Nothing is enforced in
-// either case, so reporting it as active would be misleading.
+// ActivePolicySet returns the identity and revision of the active policy set.
+//
+// An unnamed policy set with zero policies (ps.PolicySetID == "" &&
+// len(ps.Policies) == 0) is treated as inactive, covering an empty local file
+// policy directory or an xDS response indicating the fleet has no assigned
+// policy set. By contrast, a control-plane policy set revision with an explicit
+// PolicySetID (ps.PolicySetID != "") is reported even when len(ps.Policies) == 0
+// so rollout convergence can distinguish a collector running an empty policy set
+// revision from an unconfigured collector.
 func (registrySource) ActivePolicySet() PolicySetState {
 	ps := googlepolicy.ActivePolicySet()
-	if ps == nil || len(ps.Policies) == 0 {
+	if ps == nil || (ps.PolicySetID == "" && len(ps.Policies) == 0) {
 		return PolicySetState{}
 	}
 	return PolicySetState{
@@ -99,4 +122,10 @@ func (registrySource) ActivePolicySet() PolicySetState {
 // metrics are emitted.
 func (registrySource) IsControlPlaneActive() bool {
 	return googlepolicy.IsControlPlaneActive()
+}
+
+// BindXDSMeterProvider hands the MeterProvider to the xDS policy managers in
+// this process.
+func (registrySource) BindXDSMeterProvider(mp metric.MeterProvider) {
+	googlepolicy.SetXDSMeterProvider(mp)
 }

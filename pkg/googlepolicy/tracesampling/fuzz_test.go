@@ -20,7 +20,7 @@ import (
 	"math"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -97,8 +97,8 @@ func dynamicSamplingTraceContext(name, serviceName, httpMethod string, statusCod
 	}
 }
 
-func fuzzTraceSamplingSeedPolicies() []*policyv1alpha1.TraceSamplingPolicy {
-	return []*policyv1alpha1.TraceSamplingPolicy{
+func fuzzTraceSamplingSeedPolicies() []*policyv1.TraceSamplingPolicy {
+	return []*policyv1.TraceSamplingPolicy{
 		{
 			Id:              "projects/123/locations/us-central1/policySets/ps-1/policies/sample-50",
 			SamplingPercent: 50.0,
@@ -110,19 +110,19 @@ func fuzzTraceSamplingSeedPolicies() []*policyv1alpha1.TraceSamplingPolicy {
 		{
 			Id:              "sample-10-noisy-endpoints",
 			SamplingPercent: 10.0,
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
-					Target: &policyv1alpha1.TraceFieldSelector{
-						Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
-							SpanAttributePath: &policyv1alpha1.AttributePath{
+					Target: &policyv1.TraceFieldSelector{
+						Target: &policyv1.TraceFieldSelector_SpanAttributePath{
+							SpanAttributePath: &policyv1.AttributePath{
 								Segments: []string{"http.method"},
 							},
 						},
 					},
-					Predicate: &policyv1alpha1.Predicate{
-						Kind: &policyv1alpha1.Predicate_Equality{
-							Equality: &policyv1alpha1.Value{
-								Kind: &policyv1alpha1.Value_StringValue{StringValue: "GET"},
+					Predicate: &policyv1.Predicate{
+						Kind: &policyv1.Predicate_Equality{
+							Equality: &policyv1.Value{
+								Kind: &policyv1.Value_StringValue{StringValue: "GET"},
 							},
 						},
 					},
@@ -132,15 +132,15 @@ func fuzzTraceSamplingSeedPolicies() []*policyv1alpha1.TraceSamplingPolicy {
 		{
 			Id:              "sample-0-01-edge",
 			SamplingPercent: 0.01,
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
-					Target: &policyv1alpha1.TraceFieldSelector{
-						Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-							RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
+					Target: &policyv1.TraceFieldSelector{
+						Target: &policyv1.TraceFieldSelector_RecordField{
+							RecordField: policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 						},
 					},
-					Predicate: &policyv1alpha1.Predicate{
-						Kind: &policyv1alpha1.Predicate_Glob{
+					Predicate: &policyv1.Predicate{
+						Kind: &policyv1.Predicate_Glob{
 							Glob: "/healthz*",
 						},
 					},
@@ -207,7 +207,7 @@ func FuzzTraceSamplingPolicy(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		contexts := fuzzTraceSamplingContexts()
 
-		var pb policyv1alpha1.TraceSamplingPolicy
+		var pb policyv1.TraceSamplingPolicy
 		if err := proto.Unmarshal(data, &pb); err == nil {
 			ps, err := googlepolicy.MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "fuzz-rev", []proto.Message{&pb})
 			if err == nil {

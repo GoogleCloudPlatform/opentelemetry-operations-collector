@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"slices"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
@@ -53,9 +53,9 @@ func DefaultExcludePatterns() []string {
 
 // driver loads a FileLogSourcePolicy from either shape it can arrive in: the proto
 // a control plane sends, or the map an authored config decodes to.
-var driver = &googlepolicy.ProtoDriver[*policyv1alpha1.FileLogSourcePolicy]{
+var driver = &googlepolicy.ProtoDriver[*policyv1.FileLogSourcePolicy]{
 	Class: googlepolicy.PolicyClassSource,
-	New: func(pb *policyv1alpha1.FileLogSourcePolicy) (googlepolicy.Policy, error) {
+	New: func(pb *policyv1.FileLogSourcePolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
 }
@@ -77,7 +77,7 @@ var (
 
 // Policy represents a compiled, validated FileLogSourcePolicy ready for evaluation into Collector configuration.
 type Policy struct {
-	proto *policyv1alpha1.FileLogSourcePolicy
+	proto *policyv1.FileLogSourcePolicy
 }
 
 var (
@@ -87,11 +87,11 @@ var (
 
 // NewPolicyFromProto validates and compiles a FileLogSourcePolicy protobuf into a Policy.
 // Patterns in included_paths are normalized and deduplicated (preserving first-seen order).
-func NewPolicyFromProto(pb *policyv1alpha1.FileLogSourcePolicy) (*Policy, error) {
+func NewPolicyFromProto(pb *policyv1.FileLogSourcePolicy) (*Policy, error) {
 	if pb == nil {
 		return nil, ErrNilProto
 	}
-	cloned := proto.Clone(pb).(*policyv1alpha1.FileLogSourcePolicy)
+	cloned := proto.Clone(pb).(*policyv1.FileLogSourcePolicy)
 	p := &Policy{proto: cloned}
 	if err := p.Validate(); err != nil {
 		return nil, err
@@ -210,7 +210,7 @@ func Merge(policies ...*Policy) (*Policy, error) {
 	}
 	slices.Sort(mergedIncludes)
 
-	return NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	return NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "filelog_consolidated",
 		IncludedPaths: mergedIncludes,
 	})

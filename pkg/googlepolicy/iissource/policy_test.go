@@ -19,7 +19,7 @@ import (
 	"errors"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,7 +32,7 @@ func TestPolicy_Validation(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		proto   *policyv1alpha1.IisSourcePolicy
+		proto   *policyv1.IisSourcePolicy
 		wantErr error
 	}{
 		{
@@ -42,14 +42,14 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "empty id",
-			proto: &policyv1alpha1.IisSourcePolicy{
+			proto: &policyv1.IisSourcePolicy{
 				Id: "",
 			},
 			wantErr: ErrMissingID,
 		},
 		{
 			name: "interval below minimum (0s)",
-			proto: &policyv1alpha1.IisSourcePolicy{
+			proto: &policyv1.IisSourcePolicy{
 				Id:                        "iis-too-frequent",
 				CollectionIntervalSeconds: proto.Int32(0),
 			},
@@ -57,7 +57,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "interval below minimum (5s)",
-			proto: &policyv1alpha1.IisSourcePolicy{
+			proto: &policyv1.IisSourcePolicy{
 				Id:                        "iis-too-frequent-5",
 				CollectionIntervalSeconds: proto.Int32(5),
 			},
@@ -65,7 +65,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "interval below minimum (9s)",
-			proto: &policyv1alpha1.IisSourcePolicy{
+			proto: &policyv1.IisSourcePolicy{
 				Id:                        "iis-too-frequent-9",
 				CollectionIntervalSeconds: proto.Int32(9),
 			},
@@ -73,7 +73,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "interval at minimum boundary (10s)",
-			proto: &policyv1alpha1.IisSourcePolicy{
+			proto: &policyv1.IisSourcePolicy{
 				Id:                        "iis-minimum-boundary",
 				CollectionIntervalSeconds: proto.Int32(10),
 			},
@@ -81,7 +81,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "interval at maximum boundary (86400s)",
-			proto: &policyv1alpha1.IisSourcePolicy{
+			proto: &policyv1.IisSourcePolicy{
 				Id:                        "iis-maximum-boundary",
 				CollectionIntervalSeconds: proto.Int32(86400),
 			},
@@ -89,7 +89,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "interval above maximum (86401s)",
-			proto: &policyv1alpha1.IisSourcePolicy{
+			proto: &policyv1.IisSourcePolicy{
 				Id:                        "iis-too-slow-86401",
 				CollectionIntervalSeconds: proto.Int32(86401),
 			},
@@ -97,7 +97,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "interval above maximum (100000s)",
-			proto: &policyv1alpha1.IisSourcePolicy{
+			proto: &policyv1.IisSourcePolicy{
 				Id:                        "iis-too-slow-100000",
 				CollectionIntervalSeconds: proto.Int32(100000),
 			},
@@ -105,7 +105,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "valid policy with custom interval (30s)",
-			proto: &policyv1alpha1.IisSourcePolicy{
+			proto: &policyv1.IisSourcePolicy{
 				Id:                        "iis-valid-custom",
 				CollectionIntervalSeconds: proto.Int32(30),
 			},
@@ -113,7 +113,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "valid policy with unset interval (defaults to 60s)",
-			proto: &policyv1alpha1.IisSourcePolicy{
+			proto: &policyv1.IisSourcePolicy{
 				Id: "iis-default-interval",
 			},
 			wantErr: nil,
@@ -143,7 +143,7 @@ func TestPolicy_Validation(t *testing.T) {
 func TestPolicy_ReceiverIDs(t *testing.T) {
 	t.Parallel()
 
-	pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+	pol, err := NewPolicyFromProto(&policyv1.IisSourcePolicy{
 		Id: "iis-test",
 	})
 	require.NoError(t, err)
@@ -163,7 +163,7 @@ func TestPolicy_EffectiveCollectionIntervalSeconds(t *testing.T) {
 
 	t.Run("unset interval defaults to 60", func(t *testing.T) {
 		t.Parallel()
-		pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+		pol, err := NewPolicyFromProto(&policyv1.IisSourcePolicy{
 			Id: "iis-default",
 		})
 		require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestPolicy_EffectiveCollectionIntervalSeconds(t *testing.T) {
 
 	t.Run("explicit interval returns set value", func(t *testing.T) {
 		t.Parallel()
-		pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+		pol, err := NewPolicyFromProto(&policyv1.IisSourcePolicy{
 			Id:                        "iis-custom",
 			CollectionIntervalSeconds: proto.Int32(25),
 		})
@@ -186,7 +186,7 @@ func TestPolicy_ReceiverConfig(t *testing.T) {
 
 	t.Run("default interval", func(t *testing.T) {
 		t.Parallel()
-		pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+		pol, err := NewPolicyFromProto(&policyv1.IisSourcePolicy{
 			Id: "iis-default",
 		})
 		require.NoError(t, err)
@@ -202,7 +202,7 @@ func TestPolicy_ReceiverConfig(t *testing.T) {
 
 	t.Run("custom interval", func(t *testing.T) {
 		t.Parallel()
-		pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+		pol, err := NewPolicyFromProto(&policyv1.IisSourcePolicy{
 			Id:                        "iis-custom",
 			CollectionIntervalSeconds: proto.Int32(15),
 		})
@@ -221,7 +221,7 @@ func TestPolicy_ReceiverConfig(t *testing.T) {
 func TestPolicy_Evaluate(t *testing.T) {
 	t.Parallel()
 
-	pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+	pol, err := NewPolicyFromProto(&policyv1.IisSourcePolicy{
 		Id:                        "iis-test",
 		CollectionIntervalSeconds: proto.Int32(15),
 	})
@@ -247,7 +247,7 @@ func TestPolicy_Evaluate_InvalidPolicy(t *testing.T) {
 	t.Parallel()
 
 	pol := &Policy{
-		proto: &policyv1alpha1.IisSourcePolicy{
+		proto: &policyv1.IisSourcePolicy{
 			Id: "",
 		},
 	}
@@ -324,24 +324,24 @@ func TestDriver_LoadPolicy(t *testing.T) {
 func TestPolicy_Consolidate(t *testing.T) {
 	t.Parallel()
 
-	p60, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+	p60, err := NewPolicyFromProto(&policyv1.IisSourcePolicy{
 		Id: "iis-60s",
 	})
 	require.NoError(t, err)
 
-	p30, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+	p30, err := NewPolicyFromProto(&policyv1.IisSourcePolicy{
 		Id:                        "iis-30s",
 		CollectionIntervalSeconds: proto.Int32(30),
 	})
 	require.NoError(t, err)
 
-	p15, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+	p15, err := NewPolicyFromProto(&policyv1.IisSourcePolicy{
 		Id:                        "iis-15s",
 		CollectionIntervalSeconds: proto.Int32(15),
 	})
 	require.NoError(t, err)
 
-	p120, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+	p120, err := NewPolicyFromProto(&policyv1.IisSourcePolicy{
 		Id:                        "iis-120s",
 		CollectionIntervalSeconds: proto.Int32(120),
 	})
@@ -415,7 +415,7 @@ func TestPolicy_Consolidate(t *testing.T) {
 
 	t.Run("invalid receiver returns error", func(t *testing.T) {
 		t.Parallel()
-		badReceiver := &Policy{proto: &policyv1alpha1.IisSourcePolicy{Id: ""}}
+		badReceiver := &Policy{proto: &policyv1.IisSourcePolicy{Id: ""}}
 		res, err := badReceiver.Consolidate(nil)
 		require.ErrorIs(t, err, ErrMissingID)
 		assert.Nil(t, res)
@@ -428,13 +428,13 @@ func TestPolicy_Consolidate(t *testing.T) {
 
 	t.Run("invalid policy in slice returns error", func(t *testing.T) {
 		t.Parallel()
-		bad := &Policy{proto: &policyv1alpha1.IisSourcePolicy{Id: ""}}
+		bad := &Policy{proto: &policyv1.IisSourcePolicy{Id: ""}}
 		res, err := p60.Consolidate([]googlepolicy.SourcePolicy{p60, bad})
 		require.Error(t, err)
 		assert.Nil(t, res)
 
 		badInterval := &Policy{
-			proto: &policyv1alpha1.IisSourcePolicy{
+			proto: &policyv1.IisSourcePolicy{
 				Id:                        "bad-interval",
 				CollectionIntervalSeconds: proto.Int32(2),
 			},

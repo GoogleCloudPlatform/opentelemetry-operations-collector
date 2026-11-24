@@ -17,7 +17,7 @@ package tracefilter
 import (
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
 	"github.com/stretchr/testify/assert"
@@ -99,10 +99,10 @@ func matchesTrace(pol *Policy, span ptrace.Span, scope ptrace.ScopeSpans, res pt
 }
 
 // dropPolicy builds a single-matcher drop policy around target/predicate.
-func dropPolicy(id string, target *policyv1alpha1.TraceFieldSelector, predicate *policyv1alpha1.Predicate, negate bool) *policyv1alpha1.TraceFilterPolicy {
-	return &policyv1alpha1.TraceFilterPolicy{
+func dropPolicy(id string, target *policyv1.TraceFieldSelector, predicate *policyv1.Predicate, negate bool) *policyv1.TraceFilterPolicy {
+	return &policyv1.TraceFilterPolicy{
 		Id: id,
-		Matchers: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1.TraceMatcher{
 			{
 				Target:    target,
 				Predicate: predicate,
@@ -112,36 +112,36 @@ func dropPolicy(id string, target *policyv1alpha1.TraceFieldSelector, predicate 
 	}
 }
 
-func recordFieldTarget(f policyv1alpha1.SpanRecordField) *policyv1alpha1.TraceFieldSelector {
-	return &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_RecordField{RecordField: f},
+func recordFieldTarget(f policyv1.SpanRecordField) *policyv1.TraceFieldSelector {
+	return &policyv1.TraceFieldSelector{
+		Target: &policyv1.TraceFieldSelector_RecordField{RecordField: f},
 	}
 }
 
-func scopeFieldTarget(f policyv1alpha1.ScopeField) *policyv1alpha1.TraceFieldSelector {
-	return &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_ScopeField{ScopeField: f},
+func scopeFieldTarget(f policyv1.ScopeField) *policyv1.TraceFieldSelector {
+	return &policyv1.TraceFieldSelector{
+		Target: &policyv1.TraceFieldSelector_ScopeField{ScopeField: f},
 	}
 }
 
-func spanAttrTarget(path ...string) *policyv1alpha1.TraceFieldSelector {
-	return &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
-			SpanAttributePath: &policyv1alpha1.AttributePath{Segments: path},
+func spanAttrTarget(path ...string) *policyv1.TraceFieldSelector {
+	return &policyv1.TraceFieldSelector{
+		Target: &policyv1.TraceFieldSelector_SpanAttributePath{
+			SpanAttributePath: &policyv1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func equalsString(s string) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: s}},
+func equalsString(s string) *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+		Equality: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: s}},
 	}}
 }
 
 func TestPolicyValidationErrors(t *testing.T) {
 	tests := []struct {
 		name      string
-		proto     *policyv1alpha1.TraceFilterPolicy
+		proto     *policyv1.TraceFilterPolicy
 		errExpect error
 	}{
 		{
@@ -151,12 +151,12 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "missing id",
-			proto: &policyv1alpha1.TraceFilterPolicy{
+			proto: &policyv1.TraceFilterPolicy{
 				Id: "",
-				Matchers: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1.TraceMatcher{
 					{
-						Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Target:    recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -164,19 +164,19 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "missing matchers",
-			proto: &policyv1alpha1.TraceFilterPolicy{
+			proto: &policyv1.TraceFilterPolicy{
 				Id:       "p2",
-				Matchers: []*policyv1alpha1.TraceMatcher{},
+				Matchers: []*policyv1.TraceMatcher{},
 			},
 			errExpect: ErrMissingMatchers,
 		},
 		{
 			name: "matcher missing target",
-			proto: &policyv1alpha1.TraceFilterPolicy{
+			proto: &policyv1.TraceFilterPolicy{
 				Id: "p3",
-				Matchers: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1.TraceMatcher{
 					{
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -184,12 +184,12 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher empty target oneof",
-			proto: &policyv1alpha1.TraceFilterPolicy{
+			proto: &policyv1.TraceFilterPolicy{
 				Id: "p3-empty-oneof",
-				Matchers: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1.TraceMatcher{
 					{
-						Target:    &policyv1alpha1.TraceFieldSelector{},
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Target:    &policyv1.TraceFieldSelector{},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -197,12 +197,12 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher unspecified span record field",
-			proto: &policyv1alpha1.TraceFilterPolicy{
+			proto: &policyv1.TraceFilterPolicy{
 				Id: "p3-unspecified-record",
-				Matchers: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1.TraceMatcher{
 					{
-						Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_UNSPECIFIED),
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Target:    recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_UNSPECIFIED),
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -210,12 +210,12 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher unspecified scope field",
-			proto: &policyv1alpha1.TraceFilterPolicy{
+			proto: &policyv1.TraceFilterPolicy{
 				Id: "p3-unspecified-scope",
-				Matchers: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1.TraceMatcher{
 					{
-						Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED),
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Target:    scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_UNSPECIFIED),
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -223,11 +223,11 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher missing predicate",
-			proto: &policyv1alpha1.TraceFilterPolicy{
+			proto: &policyv1.TraceFilterPolicy{
 				Id: "p4",
-				Matchers: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1.TraceMatcher{
 					{
-						Target: recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+						Target: recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
 					},
 				},
 			},
@@ -235,16 +235,16 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher empty span attribute path",
-			proto: &policyv1alpha1.TraceFilterPolicy{
+			proto: &policyv1.TraceFilterPolicy{
 				Id: "p6-span-attr",
-				Matchers: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1.TraceMatcher{
 					{
-						Target: &policyv1alpha1.TraceFieldSelector{
-							Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
-								SpanAttributePath: &policyv1alpha1.AttributePath{},
+						Target: &policyv1.TraceFieldSelector{
+							Target: &policyv1.TraceFieldSelector_SpanAttributePath{
+								SpanAttributePath: &policyv1.AttributePath{},
 							},
 						},
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -252,16 +252,16 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher empty resource attribute path",
-			proto: &policyv1alpha1.TraceFilterPolicy{
+			proto: &policyv1.TraceFilterPolicy{
 				Id: "p6-res-attr",
-				Matchers: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1.TraceMatcher{
 					{
-						Target: &policyv1alpha1.TraceFieldSelector{
-							Target: &policyv1alpha1.TraceFieldSelector_ResourceAttributePath{
-								ResourceAttributePath: &policyv1alpha1.AttributePath{},
+						Target: &policyv1.TraceFieldSelector{
+							Target: &policyv1.TraceFieldSelector_ResourceAttributePath{
+								ResourceAttributePath: &policyv1.AttributePath{},
 							},
 						},
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -269,16 +269,16 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher empty scope attribute path",
-			proto: &policyv1alpha1.TraceFilterPolicy{
+			proto: &policyv1.TraceFilterPolicy{
 				Id: "p6-scope-attr",
-				Matchers: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1.TraceMatcher{
 					{
-						Target: &policyv1alpha1.TraceFieldSelector{
-							Target: &policyv1alpha1.TraceFieldSelector_ScopeAttributePath{
-								ScopeAttributePath: &policyv1alpha1.AttributePath{},
+						Target: &policyv1.TraceFieldSelector{
+							Target: &policyv1.TraceFieldSelector_ScopeAttributePath{
+								ScopeAttributePath: &policyv1.AttributePath{},
 							},
 						},
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -303,8 +303,8 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	t.Run("Drop matching span", func(t *testing.T) {
 		pb := dropPolicy(
 			"drop-healthcheck",
-			recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-			&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "healthcheck*"}},
+			recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+			&policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "healthcheck*"}},
 			false,
 		)
 
@@ -324,7 +324,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	t.Run("Drop non-matching span", func(t *testing.T) {
 		pb := dropPolicy(
 			"drop-non-matching",
-			recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+			recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
 			equalsString("not the span name"),
 			false,
 		)
@@ -337,15 +337,15 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Multiple matchers AND semantics", func(t *testing.T) {
-		pb := &policyv1alpha1.TraceFilterPolicy{
+		pb := &policyv1.TraceFilterPolicy{
 			Id: "and-matchers",
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
-					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+					Target:    recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
 					Predicate: equalsString("healthcheck.ping"),
 				},
 				{
-					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
+					Target:    recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
 					Predicate: equalsString("SERVER"),
 				},
 			},
@@ -384,25 +384,25 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Span, resource and scope attribute selectors", func(t *testing.T) {
-		pb := &policyv1alpha1.TraceFilterPolicy{
+		pb := &policyv1.TraceFilterPolicy{
 			Id: "attr-selectors",
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
 					Target:    spanAttrTarget("http.method"),
 					Predicate: equalsString("GET"),
 				},
 				{
-					Target: &policyv1alpha1.TraceFieldSelector{
-						Target: &policyv1alpha1.TraceFieldSelector_ResourceAttributePath{
-							ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"cloud.zone"}},
+					Target: &policyv1.TraceFieldSelector{
+						Target: &policyv1.TraceFieldSelector_ResourceAttributePath{
+							ResourceAttributePath: &policyv1.AttributePath{Segments: []string{"cloud.zone"}},
 						},
 					},
 					Predicate: equalsString("us-central1-a"),
 				},
 				{
-					Target: &policyv1alpha1.TraceFieldSelector{
-						Target: &policyv1alpha1.TraceFieldSelector_ScopeAttributePath{
-							ScopeAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"scope.tag"}},
+					Target: &policyv1.TraceFieldSelector{
+						Target: &policyv1.TraceFieldSelector_ScopeAttributePath{
+							ScopeAttributePath: &policyv1.AttributePath{Segments: []string{"scope.tag"}},
 						},
 					},
 					Predicate: equalsString("backend"),
@@ -416,19 +416,19 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Scope field selectors", func(t *testing.T) {
-		pb := &policyv1alpha1.TraceFilterPolicy{
+		pb := &policyv1.TraceFilterPolicy{
 			Id: "scope-fields",
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
-					Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
+					Target:    scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_NAME),
 					Predicate: equalsString("my.library"),
 				},
 				{
-					Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION),
+					Target:    scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_VERSION),
 					Predicate: equalsString("v1.2.3"),
 				},
 				{
-					Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
+					Target:    scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
 					Predicate: equalsString("https://opentelemetry.io/schemas/1.24.0"),
 				},
 			},
@@ -440,28 +440,28 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Record field selectors", func(t *testing.T) {
-		pb := &policyv1alpha1.TraceFilterPolicy{
+		pb := &policyv1.TraceFilterPolicy{
 			Id: "record-fields",
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
-					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+					Target:    recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
 					Predicate: equalsString("healthcheck.ping"),
 				},
 				{
-					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
+					Target:    recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
 					Predicate: equalsString("SERVER"),
 				},
 				{
-					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+					Target:    recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 				},
 				{
-					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+					Target:    recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 				},
 				{
-					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+					Target:    recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 				},
 			},
 		}
@@ -472,31 +472,31 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Typed span attribute matchers", func(t *testing.T) {
-		pb := &policyv1alpha1.TraceFilterPolicy{
+		pb := &policyv1.TraceFilterPolicy{
 			Id: "typed-test",
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
 					Target: spanAttrTarget("feature.enabled"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_BoolValue{BoolValue: true}},
 					}},
 				},
 				{
 					Target: spanAttrTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 1.25}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: 1.25}},
 					}},
 				},
 				{
 					Target: spanAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 200}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_IntValue{IntValue: 200}},
 					}},
 				},
 				{
 					Target: spanAttrTarget("binary.id"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x01, 0x02, 0x03}}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: []byte{0x01, 0x02, 0x03}}},
 					}},
 				},
 			},
@@ -508,31 +508,31 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Numeric comparisons (gt, gte, lt, lte)", func(t *testing.T) {
-		pb := &policyv1alpha1.TraceFilterPolicy{
+		pb := &policyv1.TraceFilterPolicy{
 			Id: "numeric-test",
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
 					Target: spanAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
-						InclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 200}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_InclusiveMinimum{
+						InclusiveMinimum: &policyv1.NumericValue{Kind: &policyv1.NumericValue_IntValue{IntValue: 200}},
 					}},
 				},
 				{
 					Target: spanAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMaximum{
-						ExclusiveMaximum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 300}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_ExclusiveMaximum{
+						ExclusiveMaximum: &policyv1.NumericValue{Kind: &policyv1.NumericValue_IntValue{IntValue: 300}},
 					}},
 				},
 				{
 					Target: spanAttrTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMinimum{
-						ExclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 1.0}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_ExclusiveMinimum{
+						ExclusiveMinimum: &policyv1.NumericValue{Kind: &policyv1.NumericValue_DoubleValue{DoubleValue: 1.0}},
 					}},
 				},
 				{
 					Target: spanAttrTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMaximum{
-						InclusiveMaximum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 1.25}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_InclusiveMaximum{
+						InclusiveMaximum: &policyv1.NumericValue{Kind: &policyv1.NumericValue_DoubleValue{DoubleValue: 1.25}},
 					}},
 				},
 			},
@@ -544,28 +544,28 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Contains predicate (list membership, string substring, bytes)", func(t *testing.T) {
-		pb := &policyv1alpha1.TraceFilterPolicy{
+		pb := &policyv1.TraceFilterPolicy{
 			Id: "contains-test",
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				// Array membership: user.roles contains "admin".
 				{
 					Target: spanAttrTarget("user.roles"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
-						Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "admin"}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
+						Containment: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: "admin"}},
 					}},
 				},
 				// Substring: span name contains "check.p".
 				{
-					Target: recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
-						Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "check.p"}},
+					Target: recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
+						Containment: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: "check.p"}},
 					}},
 				},
 				// Bytes subsequence: binary.id contains [0x02, 0x03].
 				{
 					Target: spanAttrTarget("binary.id"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
-						Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x02, 0x03}}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
+						Containment: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: []byte{0x02, 0x03}}},
 					}},
 				},
 			},
@@ -576,8 +576,8 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.True(t, matchesTrace(pol, span, scope, res))
 
 		// Non-matching list item.
-		pb.Matchers[0].Predicate = &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
-			Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "superadmin"}},
+		pb.Matchers[0].Predicate = &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
+			Containment: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: "superadmin"}},
 		}}
 		pol2, err := NewPolicyFromProto(pb)
 		require.NoError(t, err)
@@ -593,86 +593,86 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		field     policyv1alpha1.SpanRecordField
-		predicate *policyv1alpha1.Predicate
+		field     policyv1.SpanRecordField
+		predicate *policyv1.Predicate
 	}{
 		{
 			name:      "trace id equals hex string",
-			field:     policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
+			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
 			predicate: equalsString(testTraceIDHex),
 		},
 		{
 			name:      "trace id glob on hex string",
-			field:     policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
-			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "0102*0f10"}},
+			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
+			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "0102*0f10"}},
 		},
 		{
 			name:  "trace id contains hex substring",
-			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
-			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
-				Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "090a0b0c"}},
+			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
+			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
+				Containment: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: "090a0b0c"}},
 			}},
 		},
 		{
 			name:  "trace id equals raw bytes",
-			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
-			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-				Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: testTraceIDBytes[:]}},
+			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
+			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+				Equality: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: testTraceIDBytes[:]}},
 			}},
 		},
 		{
 			name:  "trace id contains raw byte subsequence",
-			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
-			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
-				Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x03, 0x04, 0x05}}},
+			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
+			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
+				Containment: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: []byte{0x03, 0x04, 0x05}}},
 			}},
 		},
 		{
 			name:      "span id equals hex string",
-			field:     policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
+			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
 			predicate: equalsString(testSpanIDHex),
 		},
 		{
 			name:      "span id glob on hex string",
-			field:     policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
-			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "0102030405060708"}},
+			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
+			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "0102030405060708"}},
 		},
 		{
 			name:  "span id equals raw bytes",
-			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
-			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-				Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: testSpanIDBytes[:]}},
+			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
+			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+				Equality: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: testSpanIDBytes[:]}},
 			}},
 		},
 		{
 			name:  "span id contains raw byte subsequence",
-			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
-			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
-				Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x06, 0x07, 0x08}}},
+			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
+			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
+				Containment: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: []byte{0x06, 0x07, 0x08}}},
 			}},
 		},
 		{
 			name:      "parent span id equals hex string",
-			field:     policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
+			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 			predicate: equalsString(testParentSpanIDHex),
 		},
 		{
 			name:      "parent span id glob on hex string",
-			field:     policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
-			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "0a0b*"}},
+			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
+			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "0a0b*"}},
 		},
 		{
 			name:  "parent span id equals raw bytes",
-			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
-			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-				Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: testParentSpanIDBytes[:]}},
+			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
+			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+				Equality: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: testParentSpanIDBytes[:]}},
 			}},
 		},
 		{
 			name:  "parent span id contains raw byte subsequence",
-			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
-			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
-				Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x0f, 0x10, 0x11}}},
+			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
+			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
+				Containment: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: []byte{0x0f, 0x10, 0x11}}},
 			}},
 		},
 	}
@@ -688,7 +688,7 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 	t.Run("wrong hex string does not match", func(t *testing.T) {
 		pol, err := NewPolicyFromProto(dropPolicy(
 			"wrong-hex",
-			recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID),
+			recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID),
 			equalsString("ffffffffffffffffffffffffffffffff"),
 			false,
 		))
@@ -699,9 +699,9 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 	t.Run("wrong raw bytes do not match", func(t *testing.T) {
 		pol, err := NewPolicyFromProto(dropPolicy(
 			"wrong-bytes",
-			recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID),
-			&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-				Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0xff, 0xff}}},
+			recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID),
+			&policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+				Equality: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: []byte{0xff, 0xff}}},
 			}},
 			false,
 		))
@@ -719,10 +719,10 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 	bareScope := ptrace.NewScopeSpans()
 	bareRes := ptrace.NewResourceSpans()
 
-	fields := []policyv1alpha1.SpanRecordField{
-		policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
-		policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
-		policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
+	fields := []policyv1.SpanRecordField{
+		policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
+		policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
+		policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 	}
 
 	for _, field := range fields {
@@ -730,7 +730,7 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy(
 				"exists-"+field.String(),
 				recordFieldTarget(field),
-				&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+				&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 				false,
 			))
 			require.NoError(t, err)
@@ -742,7 +742,7 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy(
 				"not-exists-"+field.String(),
 				recordFieldTarget(field),
-				&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+				&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 				true,
 			))
 			require.NoError(t, err)
@@ -757,8 +757,8 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 
 		pol, err := NewPolicyFromProto(dropPolicy(
 			"child-has-parent",
-			recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
-			&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+			recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
+			&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 			false,
 		))
 		require.NoError(t, err)
@@ -768,7 +768,7 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 
 // TestRootSpanParentSpanIDEmptyString pins the dual contract that
 // SPAN_RECORD_FIELD_PARENT_SPAN_ID carries for root spans, per
-// proto/policy/v1alpha1/trace_filter_policy.proto:
+// proto/policy/v1/trace_filter_policy.proto:
 //
 //   - "When evaluated with `existence`, this evaluates to false for root spans
 //     (and true with `negated: true`, allowing explicit targeting or exemption
@@ -794,7 +794,7 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 	childSpan.SetName("child")
 	childSpan.SetParentSpanID(pcommon.SpanID(testParentSpanIDBytes))
 
-	parentIDTarget := recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID)
+	parentIDTarget := recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID)
 
 	t.Run("root span equals empty string matches", func(t *testing.T) {
 		pol, err := NewPolicyFromProto(dropPolicy("drop-root-equals", parentIDTarget, equalsString(""), false))
@@ -807,7 +807,7 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 		pol, err := NewPolicyFromProto(dropPolicy(
 			"drop-root-glob",
 			parentIDTarget,
-			&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: ""}},
+			&policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: ""}},
 			false,
 		))
 		require.NoError(t, err)
@@ -819,7 +819,7 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 		pol, err := NewPolicyFromProto(dropPolicy(
 			"root-exists",
 			parentIDTarget,
-			&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+			&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 			false,
 		))
 		require.NoError(t, err)
@@ -830,7 +830,7 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 		negated, err := NewPolicyFromProto(dropPolicy(
 			"root-not-exists",
 			parentIDTarget,
-			&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+			&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 			true,
 		))
 		require.NoError(t, err)
@@ -846,7 +846,7 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 		globPol, err := NewPolicyFromProto(dropPolicy(
 			"drop-root-glob",
 			parentIDTarget,
-			&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: ""}},
+			&policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: ""}},
 			false,
 		))
 		require.NoError(t, err)
@@ -866,9 +866,9 @@ func TestZeroTraceAndSpanIDDoNotMatchEmptyString(t *testing.T) {
 	scope := ptrace.NewScopeSpans()
 	res := ptrace.NewResourceSpans()
 
-	fields := []policyv1alpha1.SpanRecordField{
-		policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
-		policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
+	fields := []policyv1.SpanRecordField{
+		policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
+		policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
 	}
 
 	for _, field := range fields {
@@ -883,7 +883,7 @@ func TestZeroTraceAndSpanIDDoNotMatchEmptyString(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy(
 				"zero-glob-"+field.String(),
 				recordFieldTarget(field),
-				&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: ""}},
+				&policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: ""}},
 				false,
 			))
 			require.NoError(t, err)
@@ -894,8 +894,8 @@ func TestZeroTraceAndSpanIDDoNotMatchEmptyString(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy(
 				"zero-contains-"+field.String(),
 				recordFieldTarget(field),
-				&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
-					Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: ""}},
+				&policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
+					Containment: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: ""}},
 				}},
 				false,
 			))
@@ -908,30 +908,30 @@ func TestZeroTraceAndSpanIDDoNotMatchEmptyString(t *testing.T) {
 // TestEmptyContextFields covers a zero-valued TraceContext, where every
 // extractor must report the target as absent rather than panicking.
 func TestEmptyContextFields(t *testing.T) {
-	targets := []*policyv1alpha1.TraceFieldSelector{
-		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID),
-		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID),
-		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
-		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
+	targets := []*policyv1.TraceFieldSelector{
+		recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+		recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID),
+		recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID),
+		recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
+		recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
 		spanAttrTarget("http.method"),
 		{
-			Target: &policyv1alpha1.TraceFieldSelector_ResourceAttributePath{
-				ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"cloud.zone"}},
+			Target: &policyv1.TraceFieldSelector_ResourceAttributePath{
+				ResourceAttributePath: &policyv1.AttributePath{Segments: []string{"cloud.zone"}},
 			},
 		},
 		{
-			Target: &policyv1alpha1.TraceFieldSelector_ScopeAttributePath{
-				ScopeAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"scope.tag"}},
+			Target: &policyv1.TraceFieldSelector_ScopeAttributePath{
+				ScopeAttributePath: &policyv1.AttributePath{Segments: []string{"scope.tag"}},
 			},
 		},
-		scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
-		scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION),
-		scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
+		scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_NAME),
+		scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_VERSION),
+		scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
 	}
 
 	for i, target := range targets {
-		pol, err := NewPolicyFromProto(dropPolicy("empty-ctx", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false))
+		pol, err := NewPolicyFromProto(dropPolicy("empty-ctx", target, &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}}, false))
 		require.NoError(t, err, "target index %d", i)
 		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterTrace(googlepolicy.TraceContext{}), "target index %d", i)
 	}
@@ -965,7 +965,7 @@ func TestKindDefaults(t *testing.T) {
 
 	kindPol, err := NewPolicyFromProto(dropPolicy(
 		"default-kind",
-		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
+		recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
 		equalsString("INTERNAL"),
 		false,
 	))
@@ -974,8 +974,8 @@ func TestKindDefaults(t *testing.T) {
 
 	existsKind, err := NewPolicyFromProto(dropPolicy(
 		"exists-kind",
-		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
-		&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+		recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
+		&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 		false,
 	))
 	require.NoError(t, err)
@@ -984,8 +984,8 @@ func TestKindDefaults(t *testing.T) {
 	// An empty name reports as absent.
 	existsName, err := NewPolicyFromProto(dropPolicy(
 		"exists-name",
-		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-		&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+		recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+		&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 		false,
 	))
 	require.NoError(t, err)
@@ -999,17 +999,17 @@ func TestEmptyScopeFieldsReportAbsent(t *testing.T) {
 	scope := ptrace.NewScopeSpans()
 	res := ptrace.NewResourceSpans()
 
-	fields := []policyv1alpha1.ScopeField{
-		policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
-		policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
-		policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
+	fields := []policyv1.ScopeField{
+		policyv1.ScopeField_SCOPE_FIELD_NAME,
+		policyv1.ScopeField_SCOPE_FIELD_VERSION,
+		policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 	}
 	for _, field := range fields {
 		t.Run(field.String(), func(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy(
 				"scope-"+field.String(),
 				scopeFieldTarget(field),
-				&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+				&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 				false,
 			))
 			require.NoError(t, err)
@@ -1041,7 +1041,7 @@ func TestNestedAttributePaths(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy(
 				"path-"+tt.name,
 				spanAttrTarget(tt.path...),
-				&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+				&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 				false,
 			))
 			require.NoError(t, err)
@@ -1050,9 +1050,9 @@ func TestNestedAttributePaths(t *testing.T) {
 	}
 
 	t.Run("nested leaf values", func(t *testing.T) {
-		pb := &policyv1alpha1.TraceFilterPolicy{
+		pb := &policyv1.TraceFilterPolicy{
 			Id: "nested-values",
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
 					Target:    spanAttrTarget("metadata", "env"),
 					Predicate: equalsString("prod"),
@@ -1106,7 +1106,7 @@ func TestDriverLoadPolicy(t *testing.T) {
 // serialization in between. The proto reaching the constructor unchanged is the
 // property that matters -- it is what makes the round trip removable.
 func TestDriverLoadsFromProto(t *testing.T) {
-	pb := dropPolicy("from-proto", recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME), equalsString("drop me"), false)
+	pb := dropPolicy("from-proto", recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME), equalsString("drop me"), false)
 
 	p, err := driver.LoadPolicyProto(pb)
 	require.NoError(t, err)
@@ -1120,7 +1120,7 @@ func TestDriverLoadsFromProto(t *testing.T) {
 // TestDriverRejectsForeignProto pins the guard that keeps a misrouted policy
 // from being silently coerced: the driver only accepts its own message.
 func TestDriverRejectsForeignProto(t *testing.T) {
-	_, err := driver.LoadPolicyProto(&policyv1alpha1.LogFilterPolicy{Id: "wrong-signal"})
+	_, err := driver.LoadPolicyProto(&policyv1.LogFilterPolicy{Id: "wrong-signal"})
 
 	require.ErrorIs(t, err, googlepolicy.ErrPolicyProtoMismatch)
 }
@@ -1133,8 +1133,8 @@ func TestUnsetSpanKindReportsPresent(t *testing.T) {
 	// Unset SpanKind is treated as "INTERNAL" and reports exists=true.
 	notExistsKindPol, err := NewPolicyFromProto(dropPolicy(
 		"not-exists-kind",
-		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
-		&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+		recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
+		&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 		true,
 	))
 	require.NoError(t, err)
@@ -1263,8 +1263,8 @@ func TestDriverLoadPolicyRejectsUnknownFields(t *testing.T) {
 	t.Run("unknown wire fields on proto rejected", func(t *testing.T) {
 		pb := dropPolicy(
 			"unknown-wire-trace-policy",
-			recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-			&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+			recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+			&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 			false,
 		)
 		pb.Matchers[0].ProtoReflect().SetUnknown([]byte{0x88, 0x06, 0x01}) // field 99, varint 1
@@ -1282,11 +1282,11 @@ func TestUnsetSpanStringFieldsReportAbsent(t *testing.T) {
 	res := ptrace.NewResourceSpans()
 	ctx := traceContext(span, scope, res)
 
-	targets := []*policyv1alpha1.TraceFieldSelector{
-		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-		scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
-		scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION),
-		scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
+	targets := []*policyv1.TraceFieldSelector{
+		recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+		scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_NAME),
+		scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_VERSION),
+		scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
 	}
 
 	for _, target := range targets {
@@ -1297,7 +1297,7 @@ func TestUnsetSpanStringFieldsReportAbsent(t *testing.T) {
 		assert.Nil(t, val, "target %v must report nil value when unset", target)
 
 		// Glob must not match unset string fields.
-		globPol, err := NewPolicyFromProto(dropPolicy("glob", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "*"}}, false))
+		globPol, err := NewPolicyFromProto(dropPolicy("glob", target, &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "*"}}, false))
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.FilterNoMatch, globPol.FilterTrace(ctx))
 
@@ -1308,7 +1308,7 @@ func TestUnsetSpanStringFieldsReportAbsent(t *testing.T) {
 	}
 
 	// By contrast, root span ParentSpanID intentionally returns ("", false) per spec so equals: "" matches.
-	parentExtract, err := matcher.CompileTraceExtractor(recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID))
+	parentExtract, err := matcher.CompileTraceExtractor(recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID))
 	require.NoError(t, err)
 	val, exists := parentExtract(ctx)
 	assert.False(t, exists)
@@ -1321,7 +1321,7 @@ func TestUnsetSpanStringFieldsReportAbsent(t *testing.T) {
 // the wire message carries no policy type of its own, so the registry has to
 // recognise it by descriptor.
 func TestDriverRoutesItsProto(t *testing.T) {
-	protoName := (&policyv1alpha1.TraceFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+	protoName := (&policyv1.TraceFilterPolicy{}).ProtoReflect().Descriptor().FullName()
 
 	got, ok := googlepolicy.PolicyTypeForProto(protoName)
 	require.True(t, ok, "no policy type is registered for %s, so trace filter policies cannot be routed", protoName)

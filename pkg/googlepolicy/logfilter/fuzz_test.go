@@ -19,7 +19,7 @@ import (
 	"math"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -73,31 +73,31 @@ func dynamicLogContext(body, severityText, attrKey, attrStr string, severityNum 
 	return logContext(lr, sl, rl)
 }
 
-func fuzzLogSeedPolicies() []*policyv1alpha1.LogFilterPolicy {
-	return []*policyv1alpha1.LogFilterPolicy{
+func fuzzLogSeedPolicies() []*policyv1.LogFilterPolicy {
+	return []*policyv1.LogFilterPolicy{
 		{
 			Id:     "projects/123/locations/us-central1/policySets/ps-1/policies/drop-body-glob",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matchers: []*policyv1alpha1.LogMatcher{
+			Action: policyv1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1.LogMatcher{
 				{
-					Target:    recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "hello*"}},
+					Target:    recordFieldTarget(policyv1.LogRecordField_LOG_RECORD_FIELD_BODY),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "hello*"}},
 				},
 			},
 		},
 		{
 			Id:     "keep-nested-attr-and-severity",
-			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-			Matchers: []*policyv1alpha1.LogMatcher{
+			Action: policyv1.Action_ACTION_KEEP.Enum(),
+			Matchers: []*policyv1.LogMatcher{
 				{
 					Target:    logAttrTarget("metadata", "env"),
 					Predicate: equalsString("prod"),
 				},
 				{
-					Target: recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
-						InclusiveMinimum: &policyv1alpha1.NumericValue{
-							Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 9},
+					Target: recordFieldTarget(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_InclusiveMinimum{
+						InclusiveMinimum: &policyv1.NumericValue{
+							Kind: &policyv1.NumericValue_IntValue{IntValue: 9},
 						},
 					}},
 				},
@@ -110,18 +110,18 @@ func fuzzLogSeedPolicies() []*policyv1alpha1.LogFilterPolicy {
 		},
 		{
 			Id:     "drop-resource-and-scope",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matchers: []*policyv1alpha1.LogMatcher{
+			Action: policyv1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1.LogMatcher{
 				{
 					Target:    resourceAttrTarget("cloud.zone"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{Existence: &emptypb.Empty{}}},
 				},
 				{
-					Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
+					Target:    scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_NAME),
 					Predicate: equalsString("my.library"),
 				},
 				{
-					Target:    recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID),
+					Target:    recordFieldTarget(policyv1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID),
 					Predicate: equalsBytes([]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}),
 				},
 			},
@@ -158,11 +158,11 @@ func verifyCompiledLogPolicy(t *testing.T, p googlepolicy.Policy, contexts []goo
 		switch res {
 		case googlepolicy.FilterNoMatch:
 		case googlepolicy.FilterKeep:
-			if pol.Action() != policyv1alpha1.Action_ACTION_KEEP {
+			if pol.Action() != policyv1.Action_ACTION_KEEP {
 				t.Fatalf("FilterLog returned FilterKeep for action %v", pol.Action())
 			}
 		case googlepolicy.FilterDrop:
-			if pol.Action() != policyv1alpha1.Action_ACTION_DROP {
+			if pol.Action() != policyv1.Action_ACTION_DROP {
 				t.Fatalf("FilterLog returned FilterDrop for action %v", pol.Action())
 			}
 		default:
@@ -202,7 +202,7 @@ func FuzzLogFilterPolicy(f *testing.F) {
 			return contexts
 		}
 
-		pb := &policyv1alpha1.LogFilterPolicy{}
+		pb := &policyv1.LogFilterPolicy{}
 		if err := proto.Unmarshal(data, pb); err == nil {
 			ps, err := googlepolicy.MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "fuzz-rev", []proto.Message{pb})
 			if err == nil {

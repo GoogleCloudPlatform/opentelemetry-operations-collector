@@ -99,6 +99,34 @@ var ErrResetBackoff = errors.New("reset backoff state")
 // backoff state before doing so. backoff accepts an integer representing the
 // number of retries, and returns the amount of time to backoff.
 func RunF(ctx context.Context, f func() error, backoff func(int) time.Duration) {
+	RunFWithTimeAfter(ctx, f, backoff, nil)
+}
+
+// RunFWithTimeAfter is like RunF, but uses timeAfter (when non-nil) to wait
+// between retry attempts.
+func RunFWithTimeAfter(ctx context.Context, f func() error, backoff func(int) time.Duration, timeAfter func(time.Duration) <-chan time.Time) {
+	if timeAfter != nil {
+		attempt := 0
+		for ctx.Err() == nil {
+			err := f()
+			if errors.Is(err, ErrResetBackoff) {
+				attempt = 0
+				continue
+			}
+			if err != nil {
+				return
+			}
+			d := backoff(attempt)
+			attempt++
+			select {
+			case <-timeAfter(d):
+			case <-ctx.Done():
+				return
+			}
+		}
+		return
+	}
+
 	attempt := 0
 	timer := time.NewTimer(0)
 	for ctx.Err() == nil {

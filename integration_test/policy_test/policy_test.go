@@ -22,9 +22,12 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -37,8 +40,11 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
+	xdsv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/filelogsource"
+	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
@@ -53,6 +59,7 @@ import (
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/extension"
 	"go.opentelemetry.io/collector/extension/xextension/storage"
+	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -71,6 +78,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	_ "google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var (
@@ -509,6 +517,211 @@ type stubLogsProcessor struct {
 	consumer.Logs
 }
 
+type envDetectorAttributesConfig struct {
+	Included []string `mapstructure:"included"`
+	Excluded []string `mapstructure:"excluded"`
+}
+
+type envDetectorConfig struct {
+	Attributes envDetectorAttributesConfig `mapstructure:"attributes"`
+}
+
+type resourceDetectionConfig struct {
+	Detectors []string          `mapstructure:"detectors"`
+	Override  bool              `mapstructure:"override"`
+	Timeout   time.Duration     `mapstructure:"timeout"`
+	Env       envDetectorConfig `mapstructure:"env"`
+	System    any               `mapstructure:"system"`
+}
+
+func matchEnvWildcardPatterns(patterns []string, key string) bool {
+	for _, p := range patterns {
+		quoted := regexp.QuoteMeta(p)
+		expr := "(?s)^" + strings.ReplaceAll(strings.ReplaceAll(quoted, `\*`, `.*`), `\?`, `.`) + "$"
+		if matched, err := regexp.MatchString(expr, key); err == nil && matched {
+			return true
+		}
+	}
+	return false
+}
+
+func applyEnvResourceAttributes(attrs pcommon.Map, cfg *resourceDetectionConfig) {
+	envStr := os.Getenv("OTEL_RESOURCE_ATTRIBUTES")
+	if envStr == "" {
+		return
+	}
+	for _, pair := range strings.Split(envStr, ",") {
+		kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+		if len(kv) == 2 {
+			k := strings.TrimSpace(kv[0])
+			v := strings.TrimSpace(kv[1])
+			if k != "" {
+				if len(cfg.Env.Attributes.Included) > 0 && !matchEnvWildcardPatterns(cfg.Env.Attributes.Included, k) {
+					continue
+				}
+				if len(cfg.Env.Attributes.Excluded) > 0 && matchEnvWildcardPatterns(cfg.Env.Attributes.Excluded, k) {
+					continue
+				}
+				if _, exists := attrs.Get(k); !exists || cfg.Override {
+					attrs.PutStr(k, v)
+				}
+			}
+		}
+	}
+}
+
+type resourceDetectionTracesProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	cfg *resourceDetectionConfig
+	consumer.Traces
+}
+
+func (p *resourceDetectionTracesProcessor) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
+	if slices.Contains(p.cfg.Detectors, "env") {
+		for i := 0; i < td.ResourceSpans().Len(); i++ {
+			rs := td.ResourceSpans().At(i)
+			applyEnvResourceAttributes(rs.Resource().Attributes(), p.cfg)
+		}
+	}
+	return p.Traces.ConsumeTraces(ctx, td)
+}
+
+type resourceDetectionMetricsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	cfg *resourceDetectionConfig
+	consumer.Metrics
+}
+
+func (p *resourceDetectionMetricsProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
+	if slices.Contains(p.cfg.Detectors, "env") {
+		for i := 0; i < md.ResourceMetrics().Len(); i++ {
+			rm := md.ResourceMetrics().At(i)
+			applyEnvResourceAttributes(rm.Resource().Attributes(), p.cfg)
+		}
+	}
+	return p.Metrics.ConsumeMetrics(ctx, md)
+}
+
+type resourceDetectionLogsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	cfg *resourceDetectionConfig
+	consumer.Logs
+}
+
+func (p *resourceDetectionLogsProcessor) ConsumeLogs(ctx context.Context, ld plog.Logs) error {
+	if slices.Contains(p.cfg.Detectors, "env") {
+		for i := 0; i < ld.ResourceLogs().Len(); i++ {
+			rl := ld.ResourceLogs().At(i)
+			applyEnvResourceAttributes(rl.Resource().Attributes(), p.cfg)
+		}
+	}
+	return p.Logs.ConsumeLogs(ctx, ld)
+}
+
+func newResourceDetectionProcessorFactory() processor.Factory {
+	return processor.NewFactory(
+		component.MustNewType("resourcedetection"),
+		func() component.Config { return &resourceDetectionConfig{} },
+		processor.WithTraces(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Traces) (processor.Traces, error) {
+			return &resourceDetectionTracesProcessor{cfg: cfg.(*resourceDetectionConfig), Traces: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithMetrics(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Metrics) (processor.Metrics, error) {
+			return &resourceDetectionMetricsProcessor{cfg: cfg.(*resourceDetectionConfig), Metrics: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithLogs(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Logs) (processor.Logs, error) {
+			return &resourceDetectionLogsProcessor{cfg: cfg.(*resourceDetectionConfig), Logs: next}, nil
+		}, component.StabilityLevelAlpha),
+	)
+}
+
+type transformContextStatements struct {
+	Context    string   `mapstructure:"context"`
+	Statements []string `mapstructure:"statements"`
+}
+
+type transformProcessorConfig struct {
+	ErrorMode        string                       `mapstructure:"error_mode"`
+	LogStatements    []transformContextStatements `mapstructure:"log_statements"`
+	MetricStatements []transformContextStatements `mapstructure:"metric_statements"`
+	TraceStatements  []transformContextStatements `mapstructure:"trace_statements"`
+}
+
+var deleteKeyAttrRegex = regexp.MustCompile(`^delete_key\(attributes,\s*"([^"]+)"\)$`)
+
+func applyResourceTransformStatements(attrs pcommon.Map, groups []transformContextStatements) {
+	for _, g := range groups {
+		if g.Context != "resource" {
+			continue
+		}
+		for _, stmt := range g.Statements {
+			if m := deleteKeyAttrRegex.FindStringSubmatch(strings.TrimSpace(stmt)); len(m) == 2 {
+				attrs.Remove(m[1])
+			}
+		}
+	}
+}
+
+type transformTracesProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	stmts []transformContextStatements
+	consumer.Traces
+}
+
+func (p *transformTracesProcessor) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
+	for i := 0; i < td.ResourceSpans().Len(); i++ {
+		applyResourceTransformStatements(td.ResourceSpans().At(i).Resource().Attributes(), p.stmts)
+	}
+	return p.Traces.ConsumeTraces(ctx, td)
+}
+
+type transformMetricsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	stmts []transformContextStatements
+	consumer.Metrics
+}
+
+func (p *transformMetricsProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
+	for i := 0; i < md.ResourceMetrics().Len(); i++ {
+		applyResourceTransformStatements(md.ResourceMetrics().At(i).Resource().Attributes(), p.stmts)
+	}
+	return p.Metrics.ConsumeMetrics(ctx, md)
+}
+
+type transformLogsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	stmts []transformContextStatements
+	consumer.Logs
+}
+
+func (p *transformLogsProcessor) ConsumeLogs(ctx context.Context, ld plog.Logs) error {
+	for i := 0; i < ld.ResourceLogs().Len(); i++ {
+		applyResourceTransformStatements(ld.ResourceLogs().At(i).Resource().Attributes(), p.stmts)
+	}
+	return p.Logs.ConsumeLogs(ctx, ld)
+}
+
+func newTransformProcessorFactory() processor.Factory {
+	return processor.NewFactory(
+		component.MustNewType("transform"),
+		func() component.Config { return &transformProcessorConfig{} },
+		processor.WithTraces(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Traces) (processor.Traces, error) {
+			return &transformTracesProcessor{stmts: cfg.(*transformProcessorConfig).TraceStatements, Traces: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithMetrics(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Metrics) (processor.Metrics, error) {
+			return &transformMetricsProcessor{stmts: cfg.(*transformProcessorConfig).MetricStatements, Metrics: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithLogs(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Logs) (processor.Logs, error) {
+			return &transformLogsProcessor{stmts: cfg.(*transformProcessorConfig).LogStatements, Logs: next}, nil
+		}, component.StabilityLevelAlpha),
+	)
+}
+
 func newStubProcessorFactory(typeStr string) processor.Factory {
 	return processor.NewFactory(
 		component.MustNewType(typeStr),
@@ -562,8 +775,8 @@ func testCollectorFactories() (otelcol.Factories, error) {
 
 	factories.Processors, err = otelcol.MakeFactoryMap[processor.Factory](
 		googlepolicyprocessor.NewFactory(),
-		newStubProcessorFactory("resourcedetection"),
-		newStubProcessorFactory("transform"),
+		newResourceDetectionProcessorFactory(),
+		newTransformProcessorFactory(),
 		newStubProcessorFactory("queue_batch"),
 	)
 	if err != nil {
@@ -1417,9 +1630,166 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 	}
 }
 
+type staticADSServer struct {
+	discoveryv3.UnimplementedAggregatedDiscoveryServiceServer
+	resp *discoveryv3.DiscoveryResponse
+}
+
+func (s *staticADSServer) StreamAggregatedResources(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+	if _, err := stream.Recv(); err != nil {
+		return err
+	}
+	if err := stream.Send(s.resp); err != nil {
+		return err
+	}
+	for {
+		if _, err := stream.Recv(); err != nil {
+			return err
+		}
+	}
+}
+
+// TestXDSClientSelfMetrics verifies that when googlecontrolplaneprovider is
+// configured with an xds:// URI, googlecontrolplaneextension wires the
+// collector's internal MeterProvider into pkg/googlepolicy so that the gRFC A78
+// grpc.xds_client.* metrics (including initial-sync counter updates replayed on
+// late binding) are exported through the default_self_metrics pipeline alongside
+// gcp.policy.set.active, with the expected values and attributes.
+func TestXDSClientSelfMetrics(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	metaSrv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(metaSrv.Close)
+	t.Setenv("GCE_METADATA_HOST", metaSrv.Listener.Addr().String())
+
+	const (
+		wantPolicySetID = "projects/my-project/locations/us-central1/policySets/ps-xds"
+		wantRevisionHex = "b2c3d479"
+	)
+
+	policyAny, err := anypb.New(&policyv1.HostMetricsSourcePolicy{
+		Id: wantPolicySetID + "/policies/hm-1",
+	})
+	if err != nil {
+		t.Fatalf("failed to pack HostMetricsSourcePolicy: %v", err)
+	}
+
+	tcAny, err := anypb.New(&xdsv1.TelemetryCollector{
+		PolicySetRevision: wantPolicySetID + "/revisions/" + wantRevisionHex,
+		Policies:          []*anypb.Any{policyAny},
+	})
+	if err != nil {
+		t.Fatalf("failed to pack TelemetryCollector: %v", err)
+	}
+
+	adsLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen for ADS server: %v", err)
+	}
+	adsSrv := grpc.NewServer()
+	discoveryv3.RegisterAggregatedDiscoveryServiceServer(adsSrv, &staticADSServer{
+		resp: &discoveryv3.DiscoveryResponse{
+			VersionInfo: wantRevisionHex,
+			TypeUrl:     "type.googleapis.com/google.telemetry.xds.v1.TelemetryCollector",
+			Nonce:       "nonce-1",
+			Resources:   []*anypb.Any{tcAny},
+		},
+	})
+	go func() {
+		_ = adsSrv.Serve(adsLn)
+	}()
+	t.Cleanup(func() {
+		adsSrv.Stop()
+	})
+
+	pipelineCfgPath, _, _, _, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+	xdsURI := fmt.Sprintf("googlecontrolplane:xds://%s?project=my-project&region=us-central1&insecure=true", adsLn.Addr().String())
+
+	col := startCollectorWithURIs(t, otelcolBin, xdsURI, fmt.Sprintf("file:%s", filepath.ToSlash(pipelineCfgPath)))
+
+	// The single resource is accepted on the first response, so each metric
+	// settles on one data point: a connected stream, one valid update, and
+	// one resource in the acked state.
+	adsAddr := adsLn.Addr().String()
+	wantXDSPoints := map[string]struct {
+		value int64
+		attrs map[string]string
+	}{
+		"grpc.xds_client.connected": {
+			value: 1,
+			attrs: map[string]string{
+				"grpc.target":     adsAddr,
+				"grpc.xds.server": adsAddr,
+			},
+		},
+		"grpc.xds_client.resource_updates_valid": {
+			value: 1,
+			attrs: map[string]string{
+				"grpc.target":            adsAddr,
+				"grpc.xds.server":        adsAddr,
+				"grpc.xds.resource_type": "TelemetryCollector",
+			},
+		},
+		"grpc.xds_client.resources": {
+			value: 1,
+			attrs: map[string]string{
+				"grpc.target":            adsAddr,
+				"grpc.xds.authority":     "telemetry-director.us-central1.xds.googleapis.com",
+				"grpc.xds.cache_state":   "acked",
+				"grpc.xds.resource_type": "TelemetryCollector",
+			},
+		},
+	}
+
+	// Wait for the latest export to match, not for the first one to arrive:
+	// an export taken before the resource is acked reports other values.
+	gotXDSPoints := map[string][]selfMetricPoint{}
+	allMatch := waitCondition(10*time.Second, 50*time.Millisecond, func() bool {
+		batches := selfMockSrv.CollectedMetrics()
+		_, _, match := latestPolicySetActive(batches)
+		for name, want := range wantXDSPoints {
+			got := latestSelfMetricPoints(batches, name)
+			gotXDSPoints[name] = got
+			if len(got) != 1 || got[0].value != want.value || !cmp.Equal(got[0].attrs, want.attrs) {
+				match = false
+			}
+		}
+		return match
+	})
+
+	value, attrs, foundActive := latestPolicySetActive(selfMockSrv.CollectedMetrics())
+	col.shutdown(t)
+
+	if !allMatch {
+		t.Fatalf("timed out waiting for xDS self-metrics on selfMockSrv\nwant: %+v\ngot:  %+v\n%s found: %v\ncollector logs:\n%s",
+			wantXDSPoints, gotXDSPoints, googlecontrolplaneextension.MetricPolicySetActive, foundActive, col.logs())
+	}
+
+	// The self metrics pipeline copies these identity attributes from the
+	// resource onto every data point. The transform processor in this test
+	// collector is a stand-in that does not do the copy, so check them on the
+	// resource they are copied from.
+	for name, points := range gotXDSPoints {
+		resourceAttrs := points[0].resourceAttrs
+		if got, want := resourceAttrs["gcp.fleet_id"], "projects/my-project/locations/us-central1/fleets/test-fleet"; got != want {
+			t.Errorf("%s: resource attribute gcp.fleet_id = %q, want %q", name, got, want)
+		}
+		if resourceAttrs["service.instance.id"] == "" {
+			t.Errorf("%s: resource attribute service.instance.id is missing or empty, resource attributes: %v", name, resourceAttrs)
+		}
+	}
+	if !foundActive || value != 0xb2c3d479 {
+		t.Errorf("%s = %d (found=%v), want %d", googlecontrolplaneextension.MetricPolicySetActive, value, foundActive, int64(0xb2c3d479))
+	}
+	if gotID := attrs[googlecontrolplaneextension.AttrPolicySetID]; gotID != wantPolicySetID {
+		t.Errorf("%s = %q, want %q", googlecontrolplaneextension.AttrPolicySetID, gotID, wantPolicySetID)
+	}
+}
+
 // TestPolicySetActiveSelfMetric_NotEmittedWithoutProvider verifies
 // that when the collector is started with a file config only (without
-// googlecontrolplaneprovider), Tango self-o11y metrics (gcp.policy.set.active)
+// googlecontrolplaneprovider), self-o11y metrics (gcp.policy.set.active)
 // are not emitted even when internal collector telemetry metrics are enabled,
 // both when googlecontrolplaneextension is omitted and when it is configured
 // independently.
@@ -1590,6 +1960,65 @@ func latestPolicySetActive(batches []pmetric.Metrics) (int64, map[string]string,
 		}
 	}
 	return value, attrs, found
+}
+
+// selfMetricPoint is one integer data point of a collector self metric,
+// together with the attributes of the resource it was exported under.
+type selfMetricPoint struct {
+	value         int64
+	attrs         map[string]string
+	resourceAttrs map[string]string
+}
+
+// latestSelfMetricPoints returns the data points of the named gauge or sum
+// from the most recent collected batch that contains it.
+func latestSelfMetricPoints(batches []pmetric.Metrics, name string) []selfMetricPoint {
+	stringAttrs := func(m pcommon.Map) map[string]string {
+		out := map[string]string{}
+		m.Range(func(k string, v pcommon.Value) bool {
+			out[k] = v.AsString()
+			return true
+		})
+		return out
+	}
+
+	for b := len(batches) - 1; b >= 0; b-- {
+		var points []selfMetricPoint
+		rms := batches[b].ResourceMetrics()
+		for i := 0; i < rms.Len(); i++ {
+			resourceAttrs := stringAttrs(rms.At(i).Resource().Attributes())
+			sms := rms.At(i).ScopeMetrics()
+			for j := 0; j < sms.Len(); j++ {
+				ms := sms.At(j).Metrics()
+				for k := 0; k < ms.Len(); k++ {
+					m := ms.At(k)
+					if m.Name() != name {
+						continue
+					}
+					var dps pmetric.NumberDataPointSlice
+					switch m.Type() {
+					case pmetric.MetricTypeGauge:
+						dps = m.Gauge().DataPoints()
+					case pmetric.MetricTypeSum:
+						dps = m.Sum().DataPoints()
+					default:
+						continue
+					}
+					for l := 0; l < dps.Len(); l++ {
+						points = append(points, selfMetricPoint{
+							value:         dps.At(l).IntValue(),
+							attrs:         stringAttrs(dps.At(l).Attributes()),
+							resourceAttrs: resourceAttrs,
+						})
+					}
+				}
+			}
+		}
+		if len(points) > 0 {
+			return points
+		}
+	}
+	return nil
 }
 
 func extractAllLogBodies(batches []plog.Logs) []string {
@@ -2107,6 +2536,137 @@ func TestFileConfigMerge_ProviderOrderPrecedence(t *testing.T) {
 	}
 }
 
+// mergeAppendFeatureGateID is the confmap feature gate that makes the lists
+// under service (extensions, pipeline receivers and pipeline exporters) append
+// across config sources instead of being replaced by the last source.
+const mergeAppendFeatureGateID = "confmap.enableMergeAppendOption"
+
+// mergeAppendEnabled reports whether confmap.enableMergeAppendOption is enabled
+// in this process.
+func mergeAppendEnabled() bool {
+	enabled := false
+	featuregate.GlobalRegistry().VisitAll(func(g *featuregate.Gate) {
+		if g.ID() == mergeAppendFeatureGateID {
+			enabled = g.IsEnabled()
+		}
+	})
+	return enabled
+}
+
+// TestFileConfigMerge_WithoutProviderKeepsDefaultReplace guards Collectors that
+// do not use a googlecontrolplane: URI. The provider is still registered, and
+// the Collector still creates it at startup, but that alone must not change how
+// their config sources are merged.
+//
+// It layers two file configs. The second one sets the exporters of a pipeline
+// the first one defined, which by default replaces the list, so logs reach only
+// the second config's destination. If confmap.enableMergeAppendOption were
+// turned on behind the user's back, the list would be appended to instead and
+// logs would be exported to both destinations.
+func TestFileConfigMerge_WithoutProviderKeepsDefaultReplace(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	if otelcolBin == "" {
+		// The in-process collector shares its feature gates with every test
+		// that ran before it, and the ones that use the provider leave this
+		// gate enabled. Start from the default instead.
+		was := mergeAppendEnabled()
+		if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, false); err != nil {
+			t.Fatalf("failed to disable %s: %v", mergeAppendFeatureGateID, err)
+		}
+		t.Cleanup(func() {
+			_ = featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, was)
+		})
+	}
+
+	baseMockSrv, baseExporterAddr := startMockOTLPServer(t)
+	overrideMockSrv, overrideExporterAddr := startMockOTLPServer(t)
+	ports := allocateEphemeralPorts(t, 1)
+	receiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	baseCfg := fmt.Sprintf(`receivers:
+  otlp/in:
+    protocols:
+      grpc:
+        endpoint: %[1]s
+exporters:
+  otlp_grpc/base_out:
+    endpoint: %[2]s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+  otlp_grpc/override_out:
+    endpoint: %[3]s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+service:
+  telemetry:
+    metrics:
+      level: None
+  pipelines:
+    logs:
+      receivers: [otlp/in]
+      processors: []
+      exporters: [otlp_grpc/base_out]
+`, receiverAddr, baseExporterAddr, overrideExporterAddr)
+	baseCfgPath := filepath.Join(tempDir, "base.yaml")
+	if err := os.WriteFile(baseCfgPath, []byte(baseCfg), 0644); err != nil {
+		t.Fatalf("failed to write base.yaml: %v", err)
+	}
+
+	overrideCfg := `service:
+  pipelines:
+    logs:
+      exporters: [otlp_grpc/override_out]
+`
+	overrideCfgPath := filepath.Join(tempDir, "override.yaml")
+	if err := os.WriteFile(overrideCfgPath, []byte(overrideCfg), 0644); err != nil {
+		t.Fatalf("failed to write override.yaml: %v", err)
+	}
+
+	col := startCollectorWithURIs(
+		t,
+		otelcolBin,
+		fmt.Sprintf("file:%s", filepath.ToSlash(baseCfgPath)),
+		fmt.Sprintf("file:%s", filepath.ToSlash(overrideCfgPath)),
+	)
+
+	if otelcolBin == "" && mergeAppendEnabled() {
+		t.Errorf("%s was enabled by a collector that does not use a googlecontrolplane: URI", mergeAppendFeatureGateID)
+	}
+
+	conn, err := grpc.NewClient(receiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to create gRPC client to %s: %v", receiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	const body = "MERGE_CHECK_LOG_LINE"
+	inputLogs := plog.NewLogs()
+	inputLogs.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty().Body().SetStr(body)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := plogotlp.NewGRPCClient(conn).Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs: %v\nlogs:\n%s", err, col.logs())
+	}
+
+	col.shutdown(t)
+
+	if diff := cmp.Diff([]string{body}, extractAllLogBodies(overrideMockSrv.CollectedLogs())); diff != "" {
+		t.Errorf("override exporter bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, col.logs())
+	}
+	if got := extractAllLogBodies(baseMockSrv.CollectedLogs()); len(got) != 0 {
+		t.Errorf("base exporter received %v, want nothing: the override config must replace the pipeline's exporters, not append to them\nlogs:\n%s", got, col.logs())
+	}
+}
+
 // TestPolicyHostMetricsSource verifies that multiple valid HostMetricsSourcePolicy instances
 // are loaded by googlecontrolplaneprovider, consolidate cleanly into a single receiver without
 // evaluation errors, and result in an active policy set.
@@ -2497,5 +3057,487 @@ func TestFileLogSourcePolicy_Integration(t *testing.T) {
 	// Verify log.file.path attribute was added because include_file_path is enabled by default.
 	if filepath.Clean(foundFilePath) != filepath.Clean(logFilePath) {
 		t.Errorf("expected log.file.path attribute %q, got %q", logFilePath, foundFilePath)
+	}
+}
+
+// TestPolicy_SecOpsPayloadCategorization_EnvResourceDetection verifies that setting
+// OTEL_RESOURCE_ATTRIBUTES dynamically attaches resource attributes to payloads
+// flowing through the canonical pipeline (logs/googlecontrolplane), enabling downstream
+// backends (such as SecOps) to categorize and route payloads based on resource metadata.
+func TestPolicy_SecOpsPayloadCategorization_EnvResourceDetection(t *testing.T) {
+	// Set the environment variable used by SecOps to categorize and route payloads
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "routing.target=secops,secops.category=audit_events,deployment.environment=production")
+
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendReceiverCfg := fmt.Sprintf(`receivers:
+  otlp/secops_in:
+    protocols:
+      grpc:
+        endpoint: %s
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/secops_in]
+    metrics/googlecontrolplane:
+      receivers: [otlp/secops_in]
+`, customReceiverAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_secops_receiver.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendReceiverCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_secops_receiver.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	// 1. Export log payload to custom receiver on canonical pipeline
+	customLogsClient := plogotlp.NewGRPCClient(conn)
+	logs := plog.NewLogs()
+	rl := logs.ResourceLogs().AppendEmpty()
+	rl.Resource().Attributes().PutStr("host.id", "vm-secops-01")
+	sl := rl.ScopeLogs().AppendEmpty()
+	lr := sl.LogRecords().AppendEmpty()
+	lr.Body().SetStr("KEEP_THIS_LOG_LINE")
+
+	if _, err := customLogsClient.Export(ctx, plogotlp.NewExportRequestFromLogs(logs)); err != nil {
+		t.Fatalf("failed to export logs to custom receiver on canonical pipeline: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// 2. Export metric payload to custom receiver on canonical pipeline
+	customMetricsClient := pmetricotlp.NewGRPCClient(conn)
+	metrics := pmetric.NewMetrics()
+	rm := metrics.ResourceMetrics().AppendEmpty()
+	rm.Resource().Attributes().PutStr("service.name", "secops-workload")
+	sm := rm.ScopeMetrics().AppendEmpty()
+	m := sm.Metrics().AppendEmpty()
+	m.SetName("secops.threat.events")
+	dp := m.SetEmptyGauge().DataPoints().AppendEmpty()
+	dp.SetIntValue(1)
+	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+
+	if _, err := customMetricsClient.Export(ctx, pmetricotlp.NewExportRequestFromMetrics(metrics)); err != nil {
+		t.Fatalf("failed to export metrics to custom receiver on canonical pipeline: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// Wait for exported logs to arrive on selfMockSrv (otlp_grpc/default_gcp_destination).
+	deadline := time.Now().Add(10 * time.Second)
+	var foundLogResourceAttrs map[string]string
+	var foundMetricResourceAttrs map[string]string
+
+	for time.Now().Before(deadline) {
+		if foundLogResourceAttrs == nil {
+			collected := h.selfMockSrv.CollectedLogs()
+			for _, ld := range collected {
+				for i := 0; i < ld.ResourceLogs().Len(); i++ {
+					r := ld.ResourceLogs().At(i)
+					for j := 0; j < r.ScopeLogs().Len(); j++ {
+						for k := 0; k < r.ScopeLogs().At(j).LogRecords().Len(); k++ {
+							rec := r.ScopeLogs().At(j).LogRecords().At(k)
+							if rec.Body().Str() == "KEEP_THIS_LOG_LINE" {
+								attrs := make(map[string]string)
+								r.Resource().Attributes().Range(func(key string, val pcommon.Value) bool {
+									attrs[key] = val.AsString()
+									return true
+								})
+								foundLogResourceAttrs = attrs
+								break
+							}
+						}
+						if foundLogResourceAttrs != nil {
+							break
+						}
+					}
+					if foundLogResourceAttrs != nil {
+						break
+					}
+				}
+				if foundLogResourceAttrs != nil {
+					break
+				}
+			}
+		}
+
+		if foundMetricResourceAttrs == nil {
+			collected := h.selfMockSrv.CollectedMetrics()
+			for _, md := range collected {
+				for i := 0; i < md.ResourceMetrics().Len(); i++ {
+					r := md.ResourceMetrics().At(i)
+					for j := 0; j < r.ScopeMetrics().Len(); j++ {
+						for k := 0; k < r.ScopeMetrics().At(j).Metrics().Len(); k++ {
+							met := r.ScopeMetrics().At(j).Metrics().At(k)
+							if met.Name() == "secops.threat.events" {
+								attrs := make(map[string]string)
+								r.Resource().Attributes().Range(func(key string, val pcommon.Value) bool {
+									attrs[key] = val.AsString()
+									return true
+								})
+								foundMetricResourceAttrs = attrs
+								break
+							}
+						}
+						if foundMetricResourceAttrs != nil {
+							break
+						}
+					}
+					if foundMetricResourceAttrs != nil {
+						break
+					}
+				}
+				if foundMetricResourceAttrs != nil {
+					break
+				}
+			}
+		}
+
+		if foundLogResourceAttrs != nil && foundMetricResourceAttrs != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	h.col.shutdown(t)
+
+	if foundLogResourceAttrs == nil {
+		t.Fatalf("expected log record not found at destination.\ncollector logs:\n%s", h.col.logs())
+	}
+	if foundMetricResourceAttrs == nil {
+		t.Fatalf("expected metric record not found at destination.\ncollector logs:\n%s", h.col.logs())
+	}
+
+	// Verify SecOps routing and categorization resource attributes populated on logs
+	if got := foundLogResourceAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected log routing.target to be 'secops', got %q", got)
+	}
+	if got := foundLogResourceAttrs["secops.category"]; got != "audit_events" {
+		t.Errorf("expected log secops.category to be 'audit_events', got %q", got)
+	}
+	if got := foundLogResourceAttrs["deployment.environment"]; got != "production" {
+		t.Errorf("expected log deployment.environment to be 'production', got %q", got)
+	}
+	if got := foundLogResourceAttrs["host.id"]; got != "vm-secops-01" {
+		t.Errorf("expected log host.id to be 'vm-secops-01', got %q", got)
+	}
+
+	// Verify SecOps routing and categorization resource attributes populated on metrics
+	if got := foundMetricResourceAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected metric routing.target to be 'secops', got %q", got)
+	}
+	if got := foundMetricResourceAttrs["secops.category"]; got != "audit_events" {
+		t.Errorf("expected metric secops.category to be 'audit_events', got %q", got)
+	}
+	if got := foundMetricResourceAttrs["deployment.environment"]; got != "production" {
+		t.Errorf("expected metric deployment.environment to be 'production', got %q", got)
+	}
+	if got := foundMetricResourceAttrs["service.name"]; got != "secops-workload" {
+		t.Errorf("expected metric service.name to be 'secops-workload', got %q", got)
+	}
+}
+
+// TestPolicy_EnvResourceDetection_ExcludesCollectorPodAttributes verifies that
+// collector process and Kubernetes pod/controller identity attributes present in
+// OTEL_RESOURCE_ATTRIBUTES (describing the collector pod itself) do not leak onto
+// canonical workload pipelines, while node/cluster and custom routing attributes
+// still apply.
+func TestPolicy_EnvResourceDetection_ExcludesCollectorPodAttributes(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", strings.Join([]string{
+		"service.name=collector-pod",
+		"service.instance.id=collector-pod-instance",
+		"k8s.cluster.name=prod-cluster",
+		"k8s.namespace.name=opentelemetry-system",
+		"k8s.pod.name=otelcol-ds-abc",
+		"k8s.pod.uid=pod-uid-123",
+		"k8s.container.name=otelcol",
+		"k8s.daemonset.name=otelcol-ds",
+		"k8s.node.name=worker-node-1",
+		"routing.target=secops",
+	}, ","))
+
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendReceiverCfg := fmt.Sprintf(`receivers:
+  otlp/k8s_in:
+    protocols:
+      grpc:
+        endpoint: %s
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/k8s_in]
+`, customReceiverAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_k8s_receiver.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendReceiverCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_k8s_receiver.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	customLogsClient := plogotlp.NewGRPCClient(conn)
+	logs := plog.NewLogs()
+	rl := logs.ResourceLogs().AppendEmpty()
+	lr := rl.ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+	lr.Body().SetStr("KEEP_THIS_LOG_LINE")
+
+	if _, err := customLogsClient.Export(ctx, plogotlp.NewExportRequestFromLogs(logs)); err != nil {
+		t.Fatalf("failed to export logs to custom receiver: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	var foundLogResourceAttrs map[string]string
+	for time.Now().Before(deadline) {
+		for _, ld := range h.selfMockSrv.CollectedLogs() {
+			for i := 0; i < ld.ResourceLogs().Len(); i++ {
+				r := ld.ResourceLogs().At(i)
+				for j := 0; j < r.ScopeLogs().Len(); j++ {
+					for k := 0; k < r.ScopeLogs().At(j).LogRecords().Len(); k++ {
+						if r.ScopeLogs().At(j).LogRecords().At(k).Body().Str() == "KEEP_THIS_LOG_LINE" {
+							attrs := make(map[string]string)
+							r.Resource().Attributes().Range(func(key string, val pcommon.Value) bool {
+								attrs[key] = val.AsString()
+								return true
+							})
+							foundLogResourceAttrs = attrs
+						}
+					}
+				}
+			}
+		}
+		if foundLogResourceAttrs != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	h.col.shutdown(t)
+
+	if foundLogResourceAttrs == nil {
+		t.Fatalf("expected log record not found at destination.\ncollector logs:\n%s", h.col.logs())
+	}
+
+	if got := foundLogResourceAttrs["k8s.cluster.name"]; got != "prod-cluster" {
+		t.Errorf("expected k8s.cluster.name 'prod-cluster', got %q", got)
+	}
+	if got := foundLogResourceAttrs["k8s.node.name"]; got != "worker-node-1" {
+		t.Errorf("expected k8s.node.name 'worker-node-1', got %q", got)
+	}
+	if got := foundLogResourceAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected routing.target 'secops', got %q", got)
+	}
+
+	for _, excludedKey := range []string{
+		"service.name",
+		"service.instance.id",
+		"k8s.namespace.name",
+		"k8s.pod.name",
+		"k8s.pod.uid",
+		"k8s.container.name",
+		"k8s.daemonset.name",
+	} {
+		if val, exists := foundLogResourceAttrs[excludedKey]; exists {
+			t.Errorf("collector pod attribute %q=%q must not leak onto workload logs", excludedKey, val)
+		}
+	}
+}
+
+// TestPolicy_EnvResourceDetection_TelemetryTypeScopedToWorkloadLogs verifies that
+// when gcp.telemetry_type is supplied via OTEL_RESOURCE_ATTRIBUTES, it is preserved
+// on canonical workload logs (logs/googlecontrolplane) while being stripped from
+// collector self-logs, collector self-metrics, canonical workload metrics, and
+// canonical workload traces.
+func TestPolicy_EnvResourceDetection_TelemetryTypeScopedToWorkloadLogs(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "gcp.telemetry_type=custom_logs,routing.target=secops")
+
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+	copyDir(t, filepath.Join("testdata", "unsupported_policy", "policies"), policiesDir)
+
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendReceiverCfg := fmt.Sprintf(`receivers:
+  otlp/telemetry_type_in:
+    protocols:
+      grpc:
+        endpoint: %s
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/telemetry_type_in]
+    metrics/googlecontrolplane:
+      receivers: [otlp/telemetry_type_in]
+    traces/googlecontrolplane:
+      receivers: [otlp/telemetry_type_in]
+`, customReceiverAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_telemetry_type_receiver.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendReceiverCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_telemetry_type_receiver.yaml: %v", err)
+	}
+
+	h := startTestHarnessWithSelfLogs(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	// 1. Send workload log
+	logs := plog.NewLogs()
+	logs.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty().Body().SetStr("WORKLOAD_LOG_TELEMETRY_TYPE")
+	if _, err := plogotlp.NewGRPCClient(conn).Export(ctx, plogotlp.NewExportRequestFromLogs(logs)); err != nil {
+		t.Fatalf("failed to export workload logs: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// 2. Send workload metric
+	metrics := pmetric.NewMetrics()
+	m := metrics.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty().Metrics().AppendEmpty()
+	m.SetName("workload.telemetry_type.check")
+	dp := m.SetEmptyGauge().DataPoints().AppendEmpty()
+	dp.SetIntValue(1)
+	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+	if _, err := pmetricotlp.NewGRPCClient(conn).Export(ctx, pmetricotlp.NewExportRequestFromMetrics(metrics)); err != nil {
+		t.Fatalf("failed to export workload metrics: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// 3. Send workload trace
+	traces := ptrace.NewTraces()
+	sp := traces.ResourceSpans().AppendEmpty().ScopeSpans().AppendEmpty().Spans().AppendEmpty()
+	sp.SetName("workload.telemetry_type.span")
+	sp.SetTraceID([16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
+	sp.SetSpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	if _, err := ptraceotlp.NewGRPCClient(conn).Export(ctx, ptraceotlp.NewExportRequestFromTraces(traces)); err != nil {
+		t.Fatalf("failed to export workload traces: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	attrsToMap := func(am pcommon.Map) map[string]string {
+		out := make(map[string]string, am.Len())
+		am.Range(func(k string, v pcommon.Value) bool {
+			out[k] = v.AsString()
+			return true
+		})
+		return out
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	var workloadLogAttrs, selfLogAttrs, workloadMetricAttrs, selfMetricAttrs, workloadTraceAttrs map[string]string
+
+	for time.Now().Before(deadline) {
+		for _, ld := range h.selfMockSrv.CollectedLogs() {
+			for i := 0; i < ld.ResourceLogs().Len(); i++ {
+				rl := ld.ResourceLogs().At(i)
+				for j := 0; j < rl.ScopeLogs().Len(); j++ {
+					for k := 0; k < rl.ScopeLogs().At(j).LogRecords().Len(); k++ {
+						body := rl.ScopeLogs().At(j).LogRecords().At(k).Body().Str()
+						if body == "WORKLOAD_LOG_TELEMETRY_TYPE" && workloadLogAttrs == nil {
+							workloadLogAttrs = attrsToMap(rl.Resource().Attributes())
+						}
+						if strings.Contains(body, "no driver found for policy type: unsupported_policy_type") && selfLogAttrs == nil {
+							selfLogAttrs = attrsToMap(rl.Resource().Attributes())
+						}
+					}
+				}
+			}
+		}
+		for _, md := range h.selfMockSrv.CollectedMetrics() {
+			for i := 0; i < md.ResourceMetrics().Len(); i++ {
+				rm := md.ResourceMetrics().At(i)
+				for j := 0; j < rm.ScopeMetrics().Len(); j++ {
+					for k := 0; k < rm.ScopeMetrics().At(j).Metrics().Len(); k++ {
+						name := rm.ScopeMetrics().At(j).Metrics().At(k).Name()
+						if name == "workload.telemetry_type.check" && workloadMetricAttrs == nil {
+							workloadMetricAttrs = attrsToMap(rm.Resource().Attributes())
+						}
+						if name == "gcp.policy.set.active" && selfMetricAttrs == nil {
+							selfMetricAttrs = attrsToMap(rm.Resource().Attributes())
+						}
+					}
+				}
+			}
+		}
+		for _, td := range h.selfMockSrv.CollectedTraces() {
+			for i := 0; i < td.ResourceSpans().Len(); i++ {
+				rs := td.ResourceSpans().At(i)
+				for j := 0; j < rs.ScopeSpans().Len(); j++ {
+					for k := 0; k < rs.ScopeSpans().At(j).Spans().Len(); k++ {
+						if rs.ScopeSpans().At(j).Spans().At(k).Name() == "workload.telemetry_type.span" && workloadTraceAttrs == nil {
+							workloadTraceAttrs = attrsToMap(rs.Resource().Attributes())
+						}
+					}
+				}
+			}
+		}
+		if workloadLogAttrs != nil && selfLogAttrs != nil && workloadMetricAttrs != nil && selfMetricAttrs != nil && workloadTraceAttrs != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	h.col.shutdown(t)
+
+	if workloadLogAttrs == nil || selfLogAttrs == nil || workloadMetricAttrs == nil || selfMetricAttrs == nil || workloadTraceAttrs == nil {
+		t.Fatalf("timed out waiting for all signals (workloadLog=%v selfLog=%v workloadMetric=%v selfMetric=%v workloadTrace=%v)\nlogs:\n%s",
+			workloadLogAttrs != nil, selfLogAttrs != nil, workloadMetricAttrs != nil, selfMetricAttrs != nil, workloadTraceAttrs != nil, h.col.logs())
+	}
+
+	// Workload logs MUST preserve gcp.telemetry_type.
+	if got := workloadLogAttrs["gcp.telemetry_type"]; got != "custom_logs" {
+		t.Errorf("expected workload log gcp.telemetry_type='custom_logs', got %q (attrs=%v)", got, workloadLogAttrs)
+	}
+	if got := workloadLogAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected workload log routing.target='secops', got %q", got)
+	}
+
+	// Self-logs, self-metrics, workload metrics, and workload traces MUST NOT carry gcp.telemetry_type.
+	for name, attrs := range map[string]map[string]string{
+		"self-log":        selfLogAttrs,
+		"self-metric":     selfMetricAttrs,
+		"workload-metric": workloadMetricAttrs,
+		"workload-trace":  workloadTraceAttrs,
+	} {
+		if val, exists := attrs["gcp.telemetry_type"]; exists {
+			t.Errorf("expected gcp.telemetry_type to be stripped from %s, got %q (attrs=%v)", name, val, attrs)
+		}
+	}
+	if got := workloadMetricAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected workload metric routing.target='secops', got %q", got)
+	}
+	if got := workloadTraceAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected workload trace routing.target='secops', got %q", got)
 	}
 }

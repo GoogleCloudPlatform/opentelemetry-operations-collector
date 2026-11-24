@@ -17,7 +17,7 @@ package metricfilter
 import (
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
 	"github.com/stretchr/testify/assert"
@@ -118,49 +118,49 @@ func matchesMetric(pol *Policy, m pmetric.Metric, scope pmetric.ScopeMetrics, re
 
 // descriptorTarget and friends keep the deeply nested selector literals out of
 // the table bodies.
-func descriptorTarget(f policyv1alpha1.MetricDescriptorField) *policyv1alpha1.MetricFieldSelector {
-	return &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{DescriptorField: f},
+func descriptorTarget(f policyv1.MetricDescriptorField) *policyv1.MetricFieldSelector {
+	return &policyv1.MetricFieldSelector{
+		Target: &policyv1.MetricFieldSelector_DescriptorField{DescriptorField: f},
 	}
 }
 
-func scopeFieldTarget(f policyv1alpha1.ScopeField) *policyv1alpha1.MetricFieldSelector {
-	return &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_ScopeField{ScopeField: f},
+func scopeFieldTarget(f policyv1.ScopeField) *policyv1.MetricFieldSelector {
+	return &policyv1.MetricFieldSelector{
+		Target: &policyv1.MetricFieldSelector_ScopeField{ScopeField: f},
 	}
 }
 
-func datapointTarget(path ...string) *policyv1alpha1.MetricFieldSelector {
-	return &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{
-			DataPointAttributePath: &policyv1alpha1.AttributePath{Segments: path},
+func datapointTarget(path ...string) *policyv1.MetricFieldSelector {
+	return &policyv1.MetricFieldSelector{
+		Target: &policyv1.MetricFieldSelector_DataPointAttributePath{
+			DataPointAttributePath: &policyv1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func resourceTarget(path ...string) *policyv1alpha1.MetricFieldSelector {
-	return &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_ResourceAttributePath{
-			ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: path},
+func resourceTarget(path ...string) *policyv1.MetricFieldSelector {
+	return &policyv1.MetricFieldSelector{
+		Target: &policyv1.MetricFieldSelector_ResourceAttributePath{
+			ResourceAttributePath: &policyv1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func scopeAttrTarget(path ...string) *policyv1alpha1.MetricFieldSelector {
-	return &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_ScopeAttributePath{
-			ScopeAttributePath: &policyv1alpha1.AttributePath{Segments: path},
+func scopeAttrTarget(path ...string) *policyv1.MetricFieldSelector {
+	return &policyv1.MetricFieldSelector{
+		Target: &policyv1.MetricFieldSelector_ScopeAttributePath{
+			ScopeAttributePath: &policyv1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func stringValue(s string) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: s}}
+func stringValue(s string) *policyv1.Value {
+	return &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: s}}
 }
 
 // mustExtract compiles a selector into its target extractor, so tests can probe
 // the (value, exists) pair directly instead of inferring it from a predicate.
-func mustExtract(t *testing.T, target *policyv1alpha1.MetricFieldSelector) matcher.MetricTargetExtractor {
+func mustExtract(t *testing.T, target *policyv1.MetricFieldSelector) matcher.MetricTargetExtractor {
 	t.Helper()
 	extract, err := matcher.CompileMetricExtractor(target)
 	require.NoError(t, err)
@@ -170,7 +170,7 @@ func mustExtract(t *testing.T, target *policyv1alpha1.MetricFieldSelector) match
 func TestPolicyValidationErrors(t *testing.T) {
 	tests := []struct {
 		name      string
-		proto     *policyv1alpha1.MetricFilterPolicy
+		proto     *policyv1.MetricFilterPolicy
 		errExpect error
 	}{
 		{
@@ -180,13 +180,13 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "missing id",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action_ACTION_DROP.Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
-						Target:    descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Target:    descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -194,13 +194,13 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "missing action",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "p1",
-				Action: policyv1alpha1.Action_ACTION_UNSPECIFIED.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action_ACTION_UNSPECIFIED.Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
-						Target:    descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Target:    descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -208,13 +208,13 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "invalid action",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "p1-invalid-action",
-				Action: policyv1alpha1.Action(99).Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action(99).Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
-						Target:    descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Target:    descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -222,21 +222,21 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "missing matchers",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:       "p2",
-				Action:   policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{},
+				Action:   policyv1.Action_ACTION_DROP.Enum(),
+				Matchers: []*policyv1.MetricMatcher{},
 			},
 			errExpect: ErrMissingMatchers,
 		},
 		{
 			name: "matcher missing target",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "p3",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action_ACTION_DROP.Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -244,13 +244,13 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher empty target oneof",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "p3-empty-oneof",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action_ACTION_DROP.Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
-						Target:    &policyv1alpha1.MetricFieldSelector{},
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Target:    &policyv1.MetricFieldSelector{},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -258,13 +258,13 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher unspecified descriptor field",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "p3-unspecified-descriptor",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action_ACTION_DROP.Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
-						Target:    descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNSPECIFIED),
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Target:    descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNSPECIFIED),
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -272,13 +272,13 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher unspecified scope field",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "p3-unspecified-scope",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action_ACTION_DROP.Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
-						Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED),
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Target:    scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_UNSPECIFIED),
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -286,13 +286,13 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher empty attribute path",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "p3-empty-path",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action_ACTION_DROP.Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
 						Target:    datapointTarget(),
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -300,13 +300,13 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher empty resource attribute path",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "p3-empty-resource-path",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action_ACTION_DROP.Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
 						Target:    resourceTarget(),
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -314,13 +314,13 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher empty scope attribute path",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "p3-empty-scope-path",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action_ACTION_DROP.Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
 						Target:    scopeAttrTarget(),
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -328,15 +328,15 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher nil datapoint attribute path",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "p3-nil-datapoint-path",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action_ACTION_DROP.Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
-						Target: &policyv1alpha1.MetricFieldSelector{
-							Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{},
+						Target: &policyv1.MetricFieldSelector{
+							Target: &policyv1.MetricFieldSelector_DataPointAttributePath{},
 						},
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -344,12 +344,12 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "matcher missing predicate",
-			proto: &policyv1alpha1.MetricFilterPolicy{
+			proto: &policyv1.MetricFilterPolicy{
 				Id:     "p4",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matchers: []*policyv1alpha1.MetricMatcher{
+				Action: policyv1.Action_ACTION_DROP.Enum(),
+				Matchers: []*policyv1.MetricMatcher{
 					{
-						Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+						Target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
 					},
 				},
 			},
@@ -372,13 +372,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	metric, scope, res := newTestMetricBundle()
 
 	t.Run("Action DROP matching metric", func(t *testing.T) {
-		pb := &policyv1alpha1.MetricFilterPolicy{
+		pb := &policyv1.MetricFilterPolicy{
 			Id:     "drop-duration-histogram",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matchers: []*policyv1alpha1.MetricMatcher{
+			Action: policyv1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1.MetricMatcher{
 				{
-					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{
+					Target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{
 						Glob: "http.server.*",
 					}},
 				},
@@ -391,7 +391,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.Equal(t, PolicyType, pol.PolicyType())
 		assert.Equal(t, googlepolicy.PolicyClassTransformation, pol.PolicyClass())
 		assert.Equal(t, []googlepolicy.Signal{googlepolicy.SignalMetrics}, pol.TargetSignals())
-		assert.Equal(t, policyv1alpha1.Action_ACTION_DROP, pol.Action())
+		assert.Equal(t, policyv1.Action_ACTION_DROP, pol.Action())
 		assert.Same(t, pb, pol.Proto())
 		assert.NoError(t, pol.Validate())
 
@@ -400,13 +400,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Action DROP non-matching metric", func(t *testing.T) {
-		pb := &policyv1alpha1.MetricFilterPolicy{
+		pb := &policyv1.MetricFilterPolicy{
 			Id:     "drop-non-matching",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matchers: []*policyv1alpha1.MetricMatcher{
+			Action: policyv1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1.MetricMatcher{
 				{
-					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("system.cpu.load"),
 					}},
 				},
@@ -421,13 +421,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Action KEEP matching metric", func(t *testing.T) {
-		pb := &policyv1alpha1.MetricFilterPolicy{
+		pb := &policyv1.MetricFilterPolicy{
 			Id:     "keep-sum",
-			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-			Matchers: []*policyv1alpha1.MetricMatcher{
+			Action: policyv1.Action_ACTION_KEEP.Enum(),
+			Matchers: []*policyv1.MetricMatcher{
 				{
-					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("SUM"),
 					}},
 				},
@@ -443,13 +443,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Action KEEP non-matching metric", func(t *testing.T) {
-		pb := &policyv1alpha1.MetricFilterPolicy{
+		pb := &policyv1.MetricFilterPolicy{
 			Id:     "keep-histogram-only",
-			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-			Matchers: []*policyv1alpha1.MetricMatcher{
+			Action: policyv1.Action_ACTION_KEEP.Enum(),
+			Matchers: []*policyv1.MetricMatcher{
 				{
-					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("HISTOGRAM"),
 					}},
 				},
@@ -466,19 +466,19 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Multiple matchers AND semantics", func(t *testing.T) {
-		pb := &policyv1alpha1.MetricFilterPolicy{
+		pb := &policyv1.MetricFilterPolicy{
 			Id:     "and-matchers",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matchers: []*policyv1alpha1.MetricMatcher{
+			Action: policyv1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1.MetricMatcher{
 				{
-					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("http.server.duration"),
 					}},
 				},
 				{
-					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("SUM"),
 					}},
 				},
@@ -490,7 +490,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.True(t, matchesMetric(pol, metric, scope, res))
 
 		// If one matcher does not match, the entire policy should not match
-		pb.Matchers[1].Predicate = &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+		pb.Matchers[1].Predicate = &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 			Equality: stringValue("HISTOGRAM"),
 		}}
 		pol2, err := NewPolicyFromProto(pb)
@@ -499,13 +499,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Negate matcher", func(t *testing.T) {
-		pb := &policyv1alpha1.MetricFilterPolicy{
+		pb := &policyv1.MetricFilterPolicy{
 			Id:     "negate-test",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matchers: []*policyv1alpha1.MetricMatcher{
+			Action: policyv1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1.MetricMatcher{
 				{
 					Target: datapointTarget("http.method"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("POST"), // does not match GET
 					}},
 					Negated: true, // negated -> true
@@ -525,37 +525,37 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Resource, scope attribute, and scope field selectors", func(t *testing.T) {
-		pb := &policyv1alpha1.MetricFilterPolicy{
+		pb := &policyv1.MetricFilterPolicy{
 			Id:     "res-scope-test",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matchers: []*policyv1alpha1.MetricMatcher{
+			Action: policyv1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1.MetricMatcher{
 				{
 					Target: resourceTarget("cloud.zone"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("us-central1-a"),
 					}},
 				},
 				{
 					Target: scopeAttrTarget("scope.tag"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("backend"),
 					}},
 				},
 				{
-					Target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Target: scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_NAME),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("my.library"),
 					}},
 				},
 				{
-					Target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Target: scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_VERSION),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("v1.2.3"),
 					}},
 				},
 				{
-					Target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Target: scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("https://opentelemetry.io/schemas/1.24.0"),
 					}},
 				},
@@ -568,61 +568,61 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Typed datapoint attribute matchers", func(t *testing.T) {
-		pb := &policyv1alpha1.MetricFilterPolicy{
+		pb := &policyv1.MetricFilterPolicy{
 			Id:     "typed-test",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matchers: []*policyv1alpha1.MetricMatcher{
+			Action: policyv1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1.MetricMatcher{
 				{
 					Target: datapointTarget("feature.enabled"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_BoolValue{BoolValue: true}},
 					}},
 				},
 				{
 					Target: datapointTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 1.25}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: 1.25}},
 					}},
 				},
 				{
 					Target: datapointTarget("binary.id"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x01, 0x02, 0x03}}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: []byte{0x01, 0x02, 0x03}}},
 					}},
 				},
 				{
 					Target: datapointTarget("http.status_code"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
-						InclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 200}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_InclusiveMinimum{
+						InclusiveMinimum: &policyv1.NumericValue{Kind: &policyv1.NumericValue_IntValue{IntValue: 200}},
 					}},
 				},
 				{
 					Target: datapointTarget("http.status_code"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMaximum{
-						ExclusiveMaximum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 300}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_ExclusiveMaximum{
+						ExclusiveMaximum: &policyv1.NumericValue{Kind: &policyv1.NumericValue_IntValue{IntValue: 300}},
 					}},
 				},
 				{
 					Target: datapointTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMinimum{
-						ExclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 1.0}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_ExclusiveMinimum{
+						ExclusiveMinimum: &policyv1.NumericValue{Kind: &policyv1.NumericValue_DoubleValue{DoubleValue: 1.0}},
 					}},
 				},
 				{
 					Target: datapointTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMaximum{
-						InclusiveMaximum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 1.25}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_InclusiveMaximum{
+						InclusiveMaximum: &policyv1.NumericValue{Kind: &policyv1.NumericValue_DoubleValue{DoubleValue: 1.25}},
 					}},
 				},
 				{
 					Target: datapointTarget("user.roles"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
 						Containment: stringValue("admin"),
 					}},
 				},
 				{
 					Target:    datapointTarget("metadata", "env"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 				},
 			},
 		}
@@ -639,43 +639,43 @@ func TestMetricDescriptorFieldSelectors(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		field      policyv1alpha1.MetricDescriptorField
+		field      policyv1.MetricDescriptorField
 		wantValue  any
 		wantExists bool
 	}{
 		{
 			name:       "NAME",
-			field:      policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
+			field:      policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 			wantValue:  "http.server.duration",
 			wantExists: true,
 		},
 		{
 			name:       "DESCRIPTION",
-			field:      policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION,
+			field:      policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION,
 			wantValue:  "Duration of inbound HTTP requests",
 			wantExists: true,
 		},
 		{
 			name:       "UNIT",
-			field:      policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT,
+			field:      policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT,
 			wantValue:  "ms",
 			wantExists: true,
 		},
 		{
 			name:       "TYPE",
-			field:      policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
+			field:      policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
 			wantValue:  "SUM",
 			wantExists: true,
 		},
 		{
 			name:       "AGGREGATION_TEMPORALITY",
-			field:      policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY,
+			field:      policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY,
 			wantValue:  "DELTA",
 			wantExists: true,
 		},
 		{
 			name:       "IS_MONOTONIC",
-			field:      policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC,
+			field:      policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC,
 			wantValue:  true,
 			wantExists: true,
 		},
@@ -695,10 +695,10 @@ func TestMetricDescriptorFieldSelectors(t *testing.T) {
 		bare.SetEmptyGauge()
 		bareCtx := googlepolicy.MetricContext{Metric: bare}
 
-		for _, field := range []policyv1alpha1.MetricDescriptorField{
-			policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
-			policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION,
-			policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT,
+		for _, field := range []policyv1.MetricDescriptorField{
+			policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
+			policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION,
+			policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT,
 		} {
 			extract := mustExtract(t, descriptorTarget(field))
 			val, exists := extract(bareCtx)
@@ -714,7 +714,7 @@ func TestMetricAttributeAndScopeSelectors(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		target     *policyv1alpha1.MetricFieldSelector
+		target     *policyv1.MetricFieldSelector
 		wantValue  any
 		wantExists bool
 	}{
@@ -756,19 +756,19 @@ func TestMetricAttributeAndScopeSelectors(t *testing.T) {
 		},
 		{
 			name:       "ScopeField NAME",
-			target:     scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
+			target:     scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_NAME),
 			wantValue:  "my.library",
 			wantExists: true,
 		},
 		{
 			name:       "ScopeField VERSION",
-			target:     scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION),
+			target:     scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_VERSION),
 			wantValue:  "v1.2.3",
 			wantExists: true,
 		},
 		{
 			name:       "ScopeField SCHEMA_URL",
-			target:     scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
+			target:     scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
 			wantValue:  "https://opentelemetry.io/schemas/1.24.0",
 			wantExists: true,
 		},
@@ -786,12 +786,12 @@ func TestMetricAttributeAndScopeSelectors(t *testing.T) {
 	t.Run("zero-valued resource and scope report absent", func(t *testing.T) {
 		empty := googlepolicy.MetricContext{Metric: metric}
 
-		for _, target := range []*policyv1alpha1.MetricFieldSelector{
+		for _, target := range []*policyv1.MetricFieldSelector{
 			resourceTarget("cloud.zone"),
 			scopeAttrTarget("scope.tag"),
-			scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
-			scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION),
-			scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
+			scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_NAME),
+			scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_VERSION),
+			scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
 		} {
 			extract := mustExtract(t, target)
 			_, exists := extract(empty)
@@ -801,7 +801,7 @@ func TestMetricAttributeAndScopeSelectors(t *testing.T) {
 }
 
 func TestIsMonotonicOnlyExistsForSum(t *testing.T) {
-	extract := mustExtract(t, descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC))
+	extract := mustExtract(t, descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC))
 
 	tests := []struct {
 		name       string
@@ -867,7 +867,7 @@ func TestIsMonotonicOnlyExistsForSum(t *testing.T) {
 }
 
 func TestAggregationTemporalitySelector(t *testing.T) {
-	extract := mustExtract(t, descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY))
+	extract := mustExtract(t, descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY))
 
 	tests := []struct {
 		name         string
@@ -956,32 +956,32 @@ func TestTemporalityString(t *testing.T) {
 func TestIsDatapointLevel(t *testing.T) {
 	tests := []struct {
 		name    string
-		targets []*policyv1alpha1.MetricFieldSelector
+		targets []*policyv1.MetricFieldSelector
 		want    bool
 	}{
 		{
 			name:    "descriptor field only",
-			targets: []*policyv1alpha1.MetricFieldSelector{descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME)},
+			targets: []*policyv1.MetricFieldSelector{descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME)},
 			want:    false,
 		},
 		{
 			name: "resource, scope attribute, and scope field only",
-			targets: []*policyv1alpha1.MetricFieldSelector{
+			targets: []*policyv1.MetricFieldSelector{
 				resourceTarget("cloud.zone"),
 				scopeAttrTarget("scope.tag"),
-				scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
+				scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_NAME),
 			},
 			want: false,
 		},
 		{
 			name:    "datapoint attribute only",
-			targets: []*policyv1alpha1.MetricFieldSelector{datapointTarget("http.method")},
+			targets: []*policyv1.MetricFieldSelector{datapointTarget("http.method")},
 			want:    true,
 		},
 		{
 			name: "mixed instrument and datapoint level",
-			targets: []*policyv1alpha1.MetricFieldSelector{
-				descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+			targets: []*policyv1.MetricFieldSelector{
+				descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
 				datapointTarget("http.method"),
 			},
 			want: true,
@@ -990,14 +990,14 @@ func TestIsDatapointLevel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pb := &policyv1alpha1.MetricFilterPolicy{
+			pb := &policyv1.MetricFilterPolicy{
 				Id:     "datapoint-level",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+				Action: policyv1.Action_ACTION_DROP.Enum(),
 			}
 			for _, target := range tt.targets {
-				pb.Matchers = append(pb.Matchers, &policyv1alpha1.MetricMatcher{
+				pb.Matchers = append(pb.Matchers, &policyv1.MetricMatcher{
 					Target:    target,
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 				})
 			}
 
@@ -1228,26 +1228,26 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 // --- Helpers for the table-driven tests below, mirroring the conventions used
 // by the logfilter and tracefilter test suites. ---
 
-func equalsString(s string) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{Equality: stringValue(s)}}
+func equalsString(s string) *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{Equality: stringValue(s)}}
 }
 
-func equalsBool(b bool) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: b}},
+func equalsBool(b bool) *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+		Equality: &policyv1.Value{Kind: &policyv1.Value_BoolValue{BoolValue: b}},
 	}}
 }
 
-func containsString(s string) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{Containment: stringValue(s)}}
+func containsString(s string) *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{Containment: stringValue(s)}}
 }
 
 // dropPolicy builds a single-matcher ACTION_DROP policy around target/predicate.
-func dropPolicy(id string, target *policyv1alpha1.MetricFieldSelector, predicate *policyv1alpha1.Predicate, negate bool) *policyv1alpha1.MetricFilterPolicy {
-	return &policyv1alpha1.MetricFilterPolicy{
+func dropPolicy(id string, target *policyv1.MetricFieldSelector, predicate *policyv1.Predicate, negate bool) *policyv1.MetricFilterPolicy {
+	return &policyv1.MetricFilterPolicy{
 		Id:     id,
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matchers: []*policyv1alpha1.MetricMatcher{
+		Action: policyv1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1.MetricMatcher{
 			{
 				Target:    target,
 				Predicate: predicate,
@@ -1258,7 +1258,7 @@ func dropPolicy(id string, target *policyv1alpha1.MetricFieldSelector, predicate
 }
 
 // mustDropPolicy compiles a single-matcher ACTION_DROP policy or fails the test.
-func mustDropPolicy(t *testing.T, id string, target *policyv1alpha1.MetricFieldSelector, predicate *policyv1alpha1.Predicate, negate bool) *Policy {
+func mustDropPolicy(t *testing.T, id string, target *policyv1.MetricFieldSelector, predicate *policyv1.Predicate, negate bool) *Policy {
 	t.Helper()
 	pol, err := NewPolicyFromProto(dropPolicy(id, target, predicate, negate))
 	require.NoError(t, err)
@@ -1284,8 +1284,8 @@ func instrumentContext(m pmetric.Metric) googlepolicy.MetricContext {
 func TestPolicyMetadata(t *testing.T) {
 	pb := dropPolicy(
 		"metadata-policy",
-		descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-		&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+		descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+		&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 		false,
 	)
 	pol, err := NewPolicyFromProto(pb)
@@ -1295,12 +1295,12 @@ func TestPolicyMetadata(t *testing.T) {
 	assert.Equal(t, PolicyType, pol.PolicyType())
 	assert.Equal(t, googlepolicy.PolicyClassTransformation, pol.PolicyClass())
 	assert.Equal(t, []googlepolicy.Signal{googlepolicy.SignalMetrics}, pol.TargetSignals())
-	assert.Equal(t, policyv1alpha1.Action_ACTION_DROP, pol.Action())
+	assert.Equal(t, policyv1.Action_ACTION_DROP, pol.Action())
 	assert.NoError(t, pol.Validate())
 
 	// Proto() hands back the very message the policy was compiled from, which
 	// is what the registry relies on to re-serialize an active policy set.
-	got, ok := pol.Proto().(*policyv1alpha1.MetricFilterPolicy)
+	got, ok := pol.Proto().(*policyv1.MetricFilterPolicy)
 	require.True(t, ok)
 	assert.Same(t, pb, got)
 }
@@ -1310,7 +1310,7 @@ func TestPolicyMetadata(t *testing.T) {
 // serialization in between. The proto reaching the constructor unchanged is the
 // property that matters -- it is what makes the round trip removable.
 func TestDriverLoadsFromProto(t *testing.T) {
-	pb := dropPolicy("from-proto", descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME), equalsString("drop.me"), false)
+	pb := dropPolicy("from-proto", descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME), equalsString("drop.me"), false)
 
 	p, err := driver.LoadPolicyProto(pb)
 	require.NoError(t, err)
@@ -1324,7 +1324,7 @@ func TestDriverLoadsFromProto(t *testing.T) {
 // TestDriverRejectsForeignProto pins the guard that keeps a misrouted policy
 // from being silently coerced: the driver only accepts its own message.
 func TestDriverRejectsForeignProto(t *testing.T) {
-	_, err := driver.LoadPolicyProto(&policyv1alpha1.LogFilterPolicy{Id: "wrong-signal"})
+	_, err := driver.LoadPolicyProto(&policyv1.LogFilterPolicy{Id: "wrong-signal"})
 
 	require.ErrorIs(t, err, googlepolicy.ErrPolicyProtoMismatch)
 }
@@ -1343,9 +1343,9 @@ func TestValidateNilProto(t *testing.T) {
 // passes through) instead of silently dropping datapoints.
 func TestFilterMetricUnknownActionFailsClosed(t *testing.T) {
 	pol := &Policy{
-		proto: &policyv1alpha1.MetricFilterPolicy{
+		proto: &policyv1.MetricFilterPolicy{
 			Id:     "unknown-action",
-			Action: policyv1alpha1.Action(99).Enum(),
+			Action: policyv1.Action(99).Enum(),
 		},
 	}
 	// No matchers => matchesContext is vacuously true, so evaluation reaches
@@ -1360,10 +1360,10 @@ func TestFilterMetricUnknownActionFailsClosed(t *testing.T) {
 // do not falsely match value-comparing predicates (like permissive globs or
 // `equals: ""`).
 func TestUnsetDescriptorStringFieldsReportAbsent(t *testing.T) {
-	fields := []policyv1alpha1.MetricDescriptorField{
-		policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
-		policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION,
-		policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT,
+	fields := []policyv1.MetricDescriptorField{
+		policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
+		policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION,
+		policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT,
 	}
 
 	for _, field := range fields {
@@ -1378,21 +1378,21 @@ func TestUnsetDescriptorStringFieldsReportAbsent(t *testing.T) {
 			assert.Nil(t, val, "unset value must return nil so value predicates do not match")
 
 			// exists is false ...
-			existsPol := mustDropPolicy(t, "exists-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
+			existsPol := mustDropPolicy(t, "exists-"+field.String(), target, &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}}, false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, existsPol.FilterMetric(ctx))
 
 			// ... which makes `exists` + negate the "field is unset" selector.
-			negatedPol := mustDropPolicy(t, "not-exists-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, true)
+			negatedPol := mustDropPolicy(t, "not-exists-"+field.String(), target, &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}}, true)
 			assert.Equal(t, googlepolicy.FilterDrop, negatedPol.FilterMetric(ctx))
 
 			// Value predicates must NOT match an unset field.
 			equalsPol := mustDropPolicy(t, "equals-empty-"+field.String(), target, equalsString(""), false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, equalsPol.FilterMetric(ctx))
 
-			globEmptyPol := mustDropPolicy(t, "glob-empty-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: ""}}, false)
+			globEmptyPol := mustDropPolicy(t, "glob-empty-"+field.String(), target, &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: ""}}, false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, globEmptyPol.FilterMetric(ctx))
 
-			globWildPol := mustDropPolicy(t, "glob-wild-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "*"}}, false)
+			globWildPol := mustDropPolicy(t, "glob-wild-"+field.String(), target, &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "*"}}, false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, globWildPol.FilterMetric(ctx))
 		})
 	}
@@ -1405,7 +1405,7 @@ func TestUnsetDescriptorStringFieldsReportAbsent(t *testing.T) {
 // still matches, and `exists` + negate is therefore the selector for "untyped
 // instrument".
 func TestMetricTypeAbsentOnUntypedInstrument(t *testing.T) {
-	target := descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE)
+	target := descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE)
 
 	untyped := pmetric.NewMetric()
 	untyped.SetName("no.type.set")
@@ -1424,7 +1424,7 @@ func TestMetricTypeAbsentOnUntypedInstrument(t *testing.T) {
 	})
 
 	t.Run("exists reports false", func(t *testing.T) {
-		pol := mustDropPolicy(t, "type-exists", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
+		pol := mustDropPolicy(t, "type-exists", target, &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}}, false)
 		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(untypedCtx))
 		// A typed instrument does satisfy the same selector.
 		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(typedCtx))
@@ -1440,7 +1440,7 @@ func TestMetricTypeAbsentOnUntypedInstrument(t *testing.T) {
 	})
 
 	t.Run("negated exists selects untyped instruments", func(t *testing.T) {
-		pol := mustDropPolicy(t, "type-not-exists", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, true)
+		pol := mustDropPolicy(t, "type-not-exists", target, &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}}, true)
 		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(untypedCtx))
 		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(typedCtx))
 	})
@@ -1452,7 +1452,7 @@ func TestMetricTypeAbsentOnUntypedInstrument(t *testing.T) {
 // a literal nil value, so nothing matches the "UNSPECIFIED" spelling and
 // `exists` + negate is the only way to select it.
 func TestAggregationTemporalityAbsentWhenUnspecified(t *testing.T) {
-	target := descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY)
+	target := descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY)
 
 	unspecified := pmetric.NewMetric()
 	unspecified.SetName("gauge.no.temporality")
@@ -1471,16 +1471,16 @@ func TestAggregationTemporalityAbsentWhenUnspecified(t *testing.T) {
 	})
 
 	t.Run("exists reports false", func(t *testing.T) {
-		pol := mustDropPolicy(t, "temporality-exists", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
+		pol := mustDropPolicy(t, "temporality-exists", target, &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}}, false)
 		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(unspecifiedCtx))
 		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(deltaCtx))
 	})
 
 	t.Run("no value predicate matches the absent field", func(t *testing.T) {
-		predicates := map[string]*policyv1alpha1.Predicate{
+		predicates := map[string]*policyv1.Predicate{
 			"equals UNSPECIFIED": equalsString("UNSPECIFIED"),
 			"equals empty":       equalsString(""),
-			"glob anything":      {Kind: &policyv1alpha1.Predicate_Glob{Glob: "*"}},
+			"glob anything":      {Kind: &policyv1.Predicate_Glob{Glob: "*"}},
 			"contains empty":     containsString(""),
 		}
 		for name, predicate := range predicates {
@@ -1490,7 +1490,7 @@ func TestAggregationTemporalityAbsentWhenUnspecified(t *testing.T) {
 	})
 
 	t.Run("negated exists selects instruments without a temporality", func(t *testing.T) {
-		pol := mustDropPolicy(t, "temporality-not-exists", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, true)
+		pol := mustDropPolicy(t, "temporality-not-exists", target, &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}}, true)
 		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(unspecifiedCtx))
 		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(deltaCtx))
 	})
@@ -1501,7 +1501,7 @@ func TestAggregationTemporalityAbsentWhenUnspecified(t *testing.T) {
 // reports the field as genuinely absent (a nil value), so no value predicate
 // matches and `exists` + negate is the "not a sum" selector.
 func TestIsMonotonicAbsentForNonSumInstruments(t *testing.T) {
-	target := descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC)
+	target := descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC)
 
 	nonSums := []struct {
 		name  string
@@ -1525,7 +1525,7 @@ func TestIsMonotonicAbsentForNonSumInstruments(t *testing.T) {
 			assert.False(t, exists)
 			assert.Nil(t, val)
 
-			existsPol := mustDropPolicy(t, "monotonic-exists-"+tt.name, target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
+			existsPol := mustDropPolicy(t, "monotonic-exists-"+tt.name, target, &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}}, false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, existsPol.FilterMetric(ctx))
 
 			// Absent means absent: neither `false` nor `true` matches.
@@ -1534,7 +1534,7 @@ func TestIsMonotonicAbsentForNonSumInstruments(t *testing.T) {
 				assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(ctx))
 			}
 
-			negatedPol := mustDropPolicy(t, "monotonic-not-exists-"+tt.name, target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, true)
+			negatedPol := mustDropPolicy(t, "monotonic-not-exists-"+tt.name, target, &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}}, true)
 			assert.Equal(t, googlepolicy.FilterDrop, negatedPol.FilterMetric(ctx))
 		})
 	}
@@ -1560,7 +1560,7 @@ func TestIsMonotonicAbsentForNonSumInstruments(t *testing.T) {
 // so the zero-value tests below can prove that none of them panics.
 type selectorCase struct {
 	name   string
-	target *policyv1alpha1.MetricFieldSelector
+	target *policyv1.MetricFieldSelector
 	// wantValue is nil for every selector that guards on a zero-valued pdata
 	// handle. SCOPE_FIELD_SCHEMA_URL is the one exception: the schema URL is
 	// carried as a plain string on MetricContext, so there is no handle to
@@ -1570,18 +1570,18 @@ type selectorCase struct {
 
 func allSelectors() []selectorCase {
 	return []selectorCase{
-		{name: "descriptor name", target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME)},
-		{name: "descriptor description", target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION)},
-		{name: "descriptor unit", target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT)},
-		{name: "descriptor type", target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE)},
-		{name: "descriptor aggregation temporality", target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY)},
-		{name: "descriptor is monotonic", target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC)},
+		{name: "descriptor name", target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME)},
+		{name: "descriptor description", target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION)},
+		{name: "descriptor unit", target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT)},
+		{name: "descriptor type", target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE)},
+		{name: "descriptor aggregation temporality", target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY)},
+		{name: "descriptor is monotonic", target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC)},
 		{name: "datapoint attribute", target: datapointTarget("http.method")},
 		{name: "resource attribute", target: resourceTarget("cloud.zone")},
 		{name: "scope attribute", target: scopeAttrTarget("scope.tag")},
-		{name: "scope name", target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME)},
-		{name: "scope version", target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION)},
-		{name: "scope schema url", target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL)},
+		{name: "scope name", target: scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_NAME)},
+		{name: "scope version", target: scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_VERSION)},
+		{name: "scope schema url", target: scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL)},
 	}
 }
 
@@ -1596,7 +1596,7 @@ func TestEmptyContextFields(t *testing.T) {
 			assert.False(t, exists)
 			assert.Equal(t, tt.wantValue, val)
 
-			pol := mustDropPolicy(t, "empty-ctx-"+tt.name, tt.target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
+			pol := mustDropPolicy(t, "empty-ctx-"+tt.name, tt.target, &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}}, false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(googlepolicy.MetricContext{}))
 		})
 	}
@@ -1610,13 +1610,13 @@ func TestEmptyContextFields(t *testing.T) {
 func TestZeroValueMetricInPopulatedContext(t *testing.T) {
 	_, scope, res := newTestMetricBundle()
 
-	descriptorFields := []policyv1alpha1.MetricDescriptorField{
-		policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
-		policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION,
-		policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT,
-		policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
-		policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY,
-		policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC,
+	descriptorFields := []policyv1.MetricDescriptorField{
+		policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
+		policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION,
+		policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT,
+		policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
+		policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY,
+		policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC,
 	}
 
 	ctx := googlepolicy.MetricContext{
@@ -1629,13 +1629,13 @@ func TestZeroValueMetricInPopulatedContext(t *testing.T) {
 
 	predicates := []struct {
 		name      string
-		predicate *policyv1alpha1.Predicate
+		predicate *policyv1.Predicate
 	}{
-		{name: "exists", predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}},
+		{name: "exists", predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}}},
 		{name: "equals", predicate: equalsString("")},
-		{name: "glob", predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "*"}}},
+		{name: "glob", predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "*"}}},
 		{name: "contains", predicate: containsString("")},
-		{name: "gte", predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{InclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 0}}}}},
+		{name: "gte", predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_InclusiveMinimum{InclusiveMinimum: &policyv1.NumericValue{Kind: &policyv1.NumericValue_IntValue{IntValue: 0}}}}},
 	}
 
 	for _, field := range descriptorFields {
@@ -1703,8 +1703,8 @@ func TestDriverLoadPolicyRejectsUnknownFields(t *testing.T) {
 	t.Run("unknown wire fields on proto rejected", func(t *testing.T) {
 		pb := dropPolicy(
 			"unknown-wire-metric-policy",
-			descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-			&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+			descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+			&policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 			false,
 		)
 		pb.Matchers[0].ProtoReflect().SetUnknown([]byte{0x88, 0x06, 0x01}) // field 99, varint 1
@@ -1722,7 +1722,7 @@ func TestDriverLoadPolicyRejectsUnknownFields(t *testing.T) {
 // the wire message carries no policy type of its own, so the registry has to
 // recognise it by descriptor.
 func TestDriverRoutesItsProto(t *testing.T) {
-	protoName := (&policyv1alpha1.MetricFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+	protoName := (&policyv1.MetricFilterPolicy{}).ProtoReflect().Descriptor().FullName()
 
 	got, ok := googlepolicy.PolicyTypeForProto(protoName)
 	require.True(t, ok, "no policy type is registered for %s, so metric filter policies cannot be routed", protoName)

@@ -75,6 +75,7 @@ BUF = $(TOOLS_DIR)/buf
 API_LINTER = $(TOOLS_DIR)/api-linter
 PROTOC_GEN_GO = $(TOOLS_DIR)/protoc-gen-go
 PROTOC_GEN_GO_GRPC = $(TOOLS_DIR)/protoc-gen-go-grpc
+PROTO_BREAKING_AGAINST ?= https://github.com/GoogleCloudPlatform/opentelemetry-operations-collector.git\#branch=master
 
 $(BUF): install-tools
 $(API_LINTER): install-tools
@@ -90,6 +91,10 @@ lint-protos: $(BUF) $(API_LINTER)
 	$(BUF) lint
 	$(BUF) format -d --exit-code
 	cd proto && $(API_LINTER) --config=../.api-linter.yaml --set-exit-status --proto-path=. $$(find policy -name '*.proto')
+
+.PHONY: breaking-protos
+breaking-protos: $(BUF)
+	$(BUF) breaking --against '$(PROTO_BREAKING_AGAINST)'
 
 .PHONY: compare-protos
 compare-protos: gen-protos
@@ -203,6 +208,10 @@ compare-otelopscol:
 .PHONY: test-all
 test-all:
 	TARGET="test" $(MAKE) target-all-modules
+
+.PHONY: fuzz-all
+fuzz-all:
+	TARGET="fuzz" $(MAKE) target-all-modules
 
 .PHONY: tidy-all
 tidy-all:

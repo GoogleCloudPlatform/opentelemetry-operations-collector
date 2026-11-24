@@ -4,7 +4,7 @@ display_name: Google-Built OpenTelemetry Collector
 description: OpenTelemetry Collector Built By Google
 blurb: The Google-Built OpenTelemetry Collector is an open-source, production-ready build of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry components.
 build_container: debian
-version: 0.165.1
+version: 0.165.2-r.1
 opentelemetry_version: 0.165.0
 opentelemetry_contrib_version: 0.165.1
 go_version: 1.26.10
@@ -44,6 +44,8 @@ components:
         - iis
         - windowsperfcounters
         - selftelemetry
+        - nginx
+        - udplog
     processors:
         - batch
         - memorylimiter
@@ -67,6 +69,9 @@ components:
         - transform
         - interval
         - metricsgeneration
+        - googlepolicy
+        - queuebatch
+        - geoip
     exporters:
         - debug
         - nop
@@ -82,6 +87,7 @@ components:
         - prometheus
         - prometheusremotewrite
         - syslog
+        - kafka
     connectors:
         - forward
         - count
@@ -111,6 +117,7 @@ components:
         - pprof
         - filestorage
         - googleclientauth
+        - googlecontrolplane
     providers:
         - env
         - file
@@ -119,11 +126,21 @@ components:
         - yaml
         - googlesecretmanager
         - secretsmanager
+        - googlecontrolplane
     telemetry: inprocess
 replaces:
     - from: github.com/go-jose/go-jose/v4
       to: github.com/go-jose/go-jose/v4 v4.1.6
       reason: Force update go-jose/v4 to v4.1.6 to fix CVE-2026-116587
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy
+      to: ../../pkg/googlepolicy
+      reason: Local dependency for googlecontrolplaneprovider
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event
+      to: ../../pkg/event
+      reason: Local dependency for googlepolicyprocessor and googlecontrolplaneprovider
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
+      to: ../..
+      reason: Local root module so pkg/googlepolicy builds against in-tree gen/go protos
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
     - exporter.googlecloud.CustomMonitoredResources

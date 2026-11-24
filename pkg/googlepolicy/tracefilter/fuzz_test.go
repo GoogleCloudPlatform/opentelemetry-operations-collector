@@ -19,7 +19,7 @@ import (
 	"math"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -73,14 +73,14 @@ func dynamicTraceContext(name, statusMsg, attrKey, attrStr string, kind, statusC
 	return traceContext(span, ss, rs)
 }
 
-func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
-	return []*policyv1alpha1.TraceFilterPolicy{
+func fuzzTraceSeedPolicies() []*policyv1.TraceFilterPolicy {
+	return []*policyv1.TraceFilterPolicy{
 		{
 			Id: "projects/123/locations/us-central1/policySets/ps-1/policies/drop-healthcheck-span",
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
-					Target: recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{
+					Target: recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{
 						Glob: "healthcheck.*",
 					}},
 				},
@@ -88,9 +88,9 @@ func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 		},
 		{
 			Id: "drop-server-spans",
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
-					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
+					Target:    recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
 					Predicate: equalsString("SERVER"),
 				},
 				{
@@ -99,9 +99,9 @@ func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 				},
 				{
 					Target: spanAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
-						InclusiveMinimum: &policyv1alpha1.NumericValue{
-							Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 200},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_InclusiveMinimum{
+						InclusiveMinimum: &policyv1.NumericValue{
+							Kind: &policyv1.NumericValue_IntValue{IntValue: 200},
 						},
 					}},
 				},
@@ -109,24 +109,24 @@ func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 		},
 		{
 			Id: "drop-root-spans-and-trace-id",
-			Matchers: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1.TraceMatcher{
 				{
-					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}}},
+					Target:    recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{Existence: &emptypb.Empty{}}},
 					Negated:   true,
 				},
 				{
-					Target: recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{
-							Kind: &policyv1alpha1.Value_BytesValue{
+					Target: recordFieldTarget(policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{
+							Kind: &policyv1.Value_BytesValue{
 								BytesValue: testTraceIDBytes[:],
 							},
 						},
 					}},
 				},
 				{
-					Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
+					Target:    scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_NAME),
 					Predicate: equalsString("my.library"),
 				},
 			},
@@ -198,7 +198,7 @@ func FuzzTraceFilterPolicy(f *testing.F) {
 			return contexts
 		}
 
-		pb := &policyv1alpha1.TraceFilterPolicy{}
+		pb := &policyv1.TraceFilterPolicy{}
 		if err := proto.Unmarshal(data, pb); err == nil {
 			ps, err := googlepolicy.MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "fuzz-rev", []proto.Message{pb})
 			if err == nil {

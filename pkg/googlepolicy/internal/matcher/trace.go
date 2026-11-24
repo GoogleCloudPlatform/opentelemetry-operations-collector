@@ -17,7 +17,7 @@ package matcher
 import (
 	"errors"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -46,7 +46,7 @@ func (cm *CompiledTraceMatcher) Eval(ctx googlepolicy.TraceContext) bool {
 
 // CompileTraceMatcher validates and compiles a TraceMatcher protobuf into a
 // CompiledTraceMatcher.
-func CompileTraceMatcher(m *policyv1alpha1.TraceMatcher) (CompiledTraceMatcher, error) {
+func CompileTraceMatcher(m *policyv1.TraceMatcher) (CompiledTraceMatcher, error) {
 	extract, err := CompileTraceExtractor(m.GetTarget())
 	if err != nil {
 		return CompiledTraceMatcher{}, err
@@ -60,16 +60,16 @@ func CompileTraceMatcher(m *policyv1alpha1.TraceMatcher) (CompiledTraceMatcher, 
 
 // CompileTraceExtractor validates and compiles a TraceFieldSelector into a
 // TraceTargetExtractor.
-func CompileTraceExtractor(target *policyv1alpha1.TraceFieldSelector) (TraceTargetExtractor, error) {
+func CompileTraceExtractor(target *policyv1.TraceFieldSelector) (TraceTargetExtractor, error) {
 	if target == nil || target.Target == nil {
 		return nil, ErrMissingTraceTarget
 	}
 
 	switch t := target.Target.(type) {
-	case *policyv1alpha1.TraceFieldSelector_RecordField:
+	case *policyv1.TraceFieldSelector_RecordField:
 		return compileSpanRecordFieldExtractor(t.RecordField)
 
-	case *policyv1alpha1.TraceFieldSelector_SpanAttributePath:
+	case *policyv1.TraceFieldSelector_SpanAttributePath:
 		steps, err := CompilePath(t.SpanAttributePath, "span")
 		if err != nil {
 			return nil, err
@@ -81,7 +81,7 @@ func CompileTraceExtractor(target *policyv1alpha1.TraceFieldSelector) (TraceTarg
 			return EvalPath(ctx.Span.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.TraceFieldSelector_ResourceAttributePath:
+	case *policyv1.TraceFieldSelector_ResourceAttributePath:
 		steps, err := CompilePath(t.ResourceAttributePath, "resource")
 		if err != nil {
 			return nil, err
@@ -93,7 +93,7 @@ func CompileTraceExtractor(target *policyv1alpha1.TraceFieldSelector) (TraceTarg
 			return EvalPath(ctx.Resource.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.TraceFieldSelector_ScopeAttributePath:
+	case *policyv1.TraceFieldSelector_ScopeAttributePath:
 		steps, err := CompilePath(t.ScopeAttributePath, "scope")
 		if err != nil {
 			return nil, err
@@ -105,7 +105,7 @@ func CompileTraceExtractor(target *policyv1alpha1.TraceFieldSelector) (TraceTarg
 			return EvalPath(ctx.Scope.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.TraceFieldSelector_ScopeField:
+	case *policyv1.TraceFieldSelector_ScopeField:
 		return compileTraceScopeFieldExtractor(t.ScopeField)
 
 	default:
@@ -113,9 +113,9 @@ func CompileTraceExtractor(target *policyv1alpha1.TraceFieldSelector) (TraceTarg
 	}
 }
 
-func compileSpanRecordFieldExtractor(field policyv1alpha1.SpanRecordField) (TraceTargetExtractor, error) {
+func compileSpanRecordFieldExtractor(field policyv1.SpanRecordField) (TraceTargetExtractor, error) {
 	switch field {
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME:
+	case policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME:
 		return func(ctx googlepolicy.TraceContext) (any, bool) {
 			if ctx.Span == (ptrace.Span{}) {
 				return nil, false
@@ -127,7 +127,7 @@ func compileSpanRecordFieldExtractor(field policyv1alpha1.SpanRecordField) (Trac
 			return s, true
 		}, nil
 
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID:
+	case policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID:
 		return func(ctx googlepolicy.TraceContext) (any, bool) {
 			if ctx.Span == (ptrace.Span{}) {
 				return nil, false
@@ -139,7 +139,7 @@ func compileSpanRecordFieldExtractor(field policyv1alpha1.SpanRecordField) (Trac
 			return tid, true
 		}, nil
 
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID:
+	case policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID:
 		return func(ctx googlepolicy.TraceContext) (any, bool) {
 			if ctx.Span == (ptrace.Span{}) {
 				return nil, false
@@ -151,7 +151,7 @@ func compileSpanRecordFieldExtractor(field policyv1alpha1.SpanRecordField) (Trac
 			return sid, true
 		}, nil
 
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID:
+	case policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID:
 		return func(ctx googlepolicy.TraceContext) (any, bool) {
 			if ctx.Span == (ptrace.Span{}) {
 				return nil, false
@@ -168,7 +168,7 @@ func compileSpanRecordFieldExtractor(field policyv1alpha1.SpanRecordField) (Trac
 			return psid, true
 		}, nil
 
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND:
+	case policyv1.SpanRecordField_SPAN_RECORD_FIELD_KIND:
 		// Unlike the other first-class fields, an unset kind is NOT reported as
 		// absent: trace_filter_policy.proto states "if span kind is unset or
 		// SPAN_KIND_UNSPECIFIED, implementations treat it as INTERNAL", so
@@ -185,9 +185,9 @@ func compileSpanRecordFieldExtractor(field policyv1alpha1.SpanRecordField) (Trac
 	}
 }
 
-func compileTraceScopeFieldExtractor(field policyv1alpha1.ScopeField) (TraceTargetExtractor, error) {
+func compileTraceScopeFieldExtractor(field policyv1.ScopeField) (TraceTargetExtractor, error) {
 	switch field {
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_NAME:
+	case policyv1.ScopeField_SCOPE_FIELD_NAME:
 		return func(ctx googlepolicy.TraceContext) (any, bool) {
 			if ctx.Scope == (pcommon.InstrumentationScope{}) {
 				return nil, false
@@ -199,7 +199,7 @@ func compileTraceScopeFieldExtractor(field policyv1alpha1.ScopeField) (TraceTarg
 			return s, true
 		}, nil
 
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION:
+	case policyv1.ScopeField_SCOPE_FIELD_VERSION:
 		return func(ctx googlepolicy.TraceContext) (any, bool) {
 			if ctx.Scope == (pcommon.InstrumentationScope{}) {
 				return nil, false
@@ -211,7 +211,7 @@ func compileTraceScopeFieldExtractor(field policyv1alpha1.ScopeField) (TraceTarg
 			return s, true
 		}, nil
 
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL:
+	case policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL:
 		return func(ctx googlepolicy.TraceContext) (any, bool) {
 			if ctx.ScopeSchemaURL == "" {
 				return nil, false

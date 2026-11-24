@@ -17,7 +17,7 @@ package tools
 import (
 	_ "github.com/bufbuild/buf/cmd/buf"
 	_ "github.com/client9/misspell/cmd/misspell"
-	_ "github.com/golangci/golangci-lint/cmd/golangci-lint"
+	_ "github.com/golangci/golangci-lint/v2/cmd/golangci-lint"
 	_ "github.com/google/addlicense"
 	_ "github.com/googleapis/api-linter/cmd/api-linter"
 	_ "go.opentelemetry.io/collector/cmd/mdatagen"

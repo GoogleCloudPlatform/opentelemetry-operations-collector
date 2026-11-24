@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+file_format: definition_manifest/2.0
 name: googlecontrolplaneextension
 description: Metrics reported by the googlecontrolplane extension
 semconv_version: 0.1.0

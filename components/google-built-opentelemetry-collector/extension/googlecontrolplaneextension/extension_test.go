@@ -28,6 +28,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/internal/metadata"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/internal/telemetry"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 )
 
 // fakeSource is a PolicyStateSource test double. Because the extension depends
@@ -159,9 +160,58 @@ func TestExtension_ReportsNegativeOneWhenNoActivePolicySet(t *testing.T) {
 	setActive := metrics[metricPolicySetActive]
 	require.Len(t, setActive, 1)
 	assert.Equal(t, int64(-1), setActive[0].Value)
-	// Identity is derived from the active policies, so with none active there
-	// is nothing to report. The label is present but empty rather than
-	// absent, so the series shape matches that of an active collector.
+	// With no active policy set, there is no policy set identity to report. The
+	// label is present but empty rather than absent, so the series shape matches
+	// that of an active collector.
+	assert.Equal(t, map[string]string{
+		attrPolicySetID: "",
+	}, attrsOf(setActive[0]))
+}
+
+// End-to-end check with registrySource: an xDS PolicySet revision with zero
+// policies still carries a PolicySetID and must emit its parsed revision ID and
+// gcp.policy.set.id rather than -1.
+func TestExtension_RegistrySource_EmptyControlPlanePolicySetReportsActiveRevision(t *testing.T) {
+	googlepolicy.RegisterProvider()
+	t.Cleanup(googlepolicy.UnregisterProvider)
+
+	setActivePolicySet(t, &googlepolicy.PolicySet{
+		PolicySetID: testPolicySetID,
+		RevisionID:  "b2c3d479",
+		Policies:    map[string]*googlepolicy.PolicySetEntry{},
+	})
+
+	ext, reader := newTestExtension(t, registrySource{})
+	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	t.Cleanup(func() { assert.NoError(t, ext.Shutdown(context.Background())) })
+
+	setActive := collect(t, reader)[metricPolicySetActive]
+	require.Len(t, setActive, 1)
+	assert.Equal(t, int64(0xb2c3d479), setActive[0].Value)
+	assert.Equal(t, map[string]string{
+		attrPolicySetID: testPolicySetID,
+	}, attrsOf(setActive[0]))
+}
+
+// End-to-end check with registrySource: an empty file-sourced PolicySet
+// (PolicySetID == "", len(Policies) == 0) must still emit -1 with empty
+// gcp.policy.set.id even though it carries a directory SHA-256 revision hash.
+func TestExtension_RegistrySource_EmptyFilePolicySetReportsNegativeOne(t *testing.T) {
+	googlepolicy.RegisterProvider()
+	t.Cleanup(googlepolicy.UnregisterProvider)
+
+	setActivePolicySet(t, &googlepolicy.PolicySet{
+		RevisionID: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		Policies:   map[string]*googlepolicy.PolicySetEntry{},
+	})
+
+	ext, reader := newTestExtension(t, registrySource{})
+	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	t.Cleanup(func() { assert.NoError(t, ext.Shutdown(context.Background())) })
+
+	setActive := collect(t, reader)[metricPolicySetActive]
+	require.Len(t, setActive, 1)
+	assert.Equal(t, int64(-1), setActive[0].Value)
 	assert.Equal(t, map[string]string{
 		attrPolicySetID: "",
 	}, attrsOf(setActive[0]))

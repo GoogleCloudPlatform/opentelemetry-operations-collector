@@ -58,16 +58,31 @@ func TestRegistrySource_NoActivePolicySet(t *testing.T) {
 	assert.Equal(t, PolicySetState{}, registrySource{}.ActivePolicySet())
 }
 
-// An activated policy set with no policies, as produced by an empty policy
-// directory or an xDS revision that clears all policies, enforces nothing and
+// An unnamed policy set with no policies (such as an empty local policy
+// directory or an xDS response indicating the fleet has no assigned policy set)
 // must read as inactive even though it carries a revision.
-func TestRegistrySource_EmptyPolicySetIsInactive(t *testing.T) {
+func TestRegistrySource_EmptyUnnamedPolicySetIsInactive(t *testing.T) {
 	setActivePolicySet(t, &googlepolicy.PolicySet{
 		RevisionID: "rev-empty",
 		Policies:   map[string]*googlepolicy.PolicySetEntry{},
 	})
 
 	assert.Equal(t, PolicySetState{}, registrySource{}.ActivePolicySet())
+}
+
+// An xDS control-plane policy set revision with zero policies still carries an
+// explicit PolicySetID and must report both its ID and revision so rollout
+// convergence can distinguish it from an unconfigured collector.
+func TestRegistrySource_EmptyControlPlanePolicySetIsActive(t *testing.T) {
+	const psName = "projects/demo-project/locations/us-central1/policySets/empty-ps"
+
+	setActivePolicySet(t, &googlepolicy.PolicySet{
+		PolicySetID: psName,
+		RevisionID:  "b2c3d479",
+		Policies:    map[string]*googlepolicy.PolicySetEntry{},
+	})
+
+	assert.Equal(t, PolicySetState{ID: psName, Revision: "b2c3d479"}, registrySource{}.ActivePolicySet())
 }
 
 // The ID is taken from the registry snapshot as is, alongside the revision,

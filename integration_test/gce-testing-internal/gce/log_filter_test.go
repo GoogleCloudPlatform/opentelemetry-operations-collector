@@ -15,10 +15,15 @@
 package gce
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestBuildLogFilter(t *testing.T) {
@@ -42,13 +47,96 @@ func TestBuildLogFilter(t *testing.T) {
 }
 
 func TestShouldRetryHasMatchingLog(t *testing.T) {
-	if !shouldRetryHasMatchingLog(errors.New("rpc error: code = ResourceExhausted desc = Quota exceeded")) {
-		t.Errorf("expected Quota error to be retriable")
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	expiredCtx, cancelExpired := context.WithDeadline(context.Background(), time.Unix(0, 0))
+	defer cancelExpired()
+
+	tests := []struct {
+		name     string
+		ctx      context.Context // nil means context.Background().
+		err      error
+		expected bool
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "quota error",
+			err:      errors.New("rpc error: code = ResourceExhausted desc = Quota exceeded"),
+			expected: true,
+		},
+		{
+			name:     "internal error encountered",
+			err:      errors.New("rpc error: code = Internal desc = Internal error encountered"),
+			expected: true,
+		},
+		{
+			name:     "context deadline exceeded with active parent context",
+			err:      context.DeadlineExceeded,
+			expected: true,
+		},
+		{
+			name:     "wrapped context deadline exceeded with active parent context",
+			err:      fmt.Errorf("iterating log entries: %w", context.DeadlineExceeded),
+			expected: true,
+		},
+		{
+			name:     "grpc deadline exceeded with active parent context",
+			err:      status.Error(codes.DeadlineExceeded, "context deadline exceeded"),
+			expected: true,
+		},
+		{
+			name:     "wrapped grpc deadline exceeded with active parent context",
+			err:      fmt.Errorf("iterating log entries: %w", status.Error(codes.DeadlineExceeded, "context deadline exceeded")),
+			expected: true,
+		},
+		{
+			name:     "context deadline exceeded with expired parent context",
+			ctx:      expiredCtx,
+			err:      context.DeadlineExceeded,
+			expected: false,
+		},
+		{
+			name:     "grpc deadline exceeded with canceled parent context",
+			ctx:      canceledCtx,
+			err:      status.Error(codes.DeadlineExceeded, "context deadline exceeded"),
+			expected: false,
+		},
+		{
+			name:     "quota error with canceled parent context",
+			ctx:      canceledCtx,
+			err:      errors.New("rpc error: code = ResourceExhausted desc = Quota exceeded"),
+			expected: false,
+		},
+		{
+			name:     "context canceled with active parent context",
+			err:      context.Canceled,
+			expected: false,
+		},
+		{
+			name:     "grpc canceled with active parent context",
+			err:      status.Error(codes.Canceled, "context canceled"),
+			expected: false,
+		},
+		{
+			name:     "permission denied",
+			err:      status.Error(codes.PermissionDenied, "caller missing logging.entries.list"),
+			expected: false,
+		},
 	}
-	if !shouldRetryHasMatchingLog(errors.New("rpc error: code = Internal desc = Internal error encountered")) {
-		t.Errorf("expected Internal error encountered to be retriable")
-	}
-	if shouldRetryHasMatchingLog(errors.New("rpc error: code = PermissionDenied desc = caller missing logging.entries.list")) {
-		t.Errorf("expected PermissionDenied not to be retriable")
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := tc.ctx
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			if got := shouldRetryHasMatchingLog(ctx, tc.err); got != tc.expected {
+				t.Errorf("shouldRetryHasMatchingLog(ctx.Err()=%v, %v) = %v, want %v", ctx.Err(), tc.err, got, tc.expected)
+			}
+		})
 	}
 }

@@ -35,9 +35,6 @@ processors:
   agentmetrics:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor v0.0.0
     path: "../components/otelopscol/processor/agentmetricsprocessor"
-  casttosum:
-    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/casttosumprocessor v0.0.0
-    path: "../components/otelopscol/processor/casttosumprocessor"
   normalizesums:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.0.0
     path: "../components/otelopscol/processor/normalizesumsprocessor"

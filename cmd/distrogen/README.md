@@ -44,6 +44,21 @@ distrogen generate --spec spec.yaml
 ```
 It will generate a `basic-distro` directory. In that directory you can run `make build` to build a binary, or `make image-build` to build a binary as well as the resulting Docker container.
 
+## FIPS 140-3 (`gofips140`)
+
+Distributions using Go 1.24 or later can enable Go's native FIPS 140-3 cryptographic module via the optional `gofips140` field in `spec.yaml`. Unlike `boringcrypto`, `GOFIPS140` works with `CGO_ENABLED=0` across Linux, Windows, and macOS (including GoReleaser packages and archives, and `alpine` build containers).
+
+```yaml
+gofips140: v1.0.0 # or v1.26.0, certified, inprocess, latest, off
+```
+
+When enabled, `distrogen` propagates `GOFIPS140` across `make build`, `make build-win` (including `build.ps1`), and `.goreleaser.yaml`.
+
+Validation rules and notes:
+* `boringcrypto: true` and `gofips140` cannot be enabled together, because Go disallows combining `GOEXPERIMENT=boringcrypto` with `GOFIPS140`.
+* `gofips140` requires `go_version` 1.24 or later and cannot be combined with the `purego` build tag.
+* Binaries compiled with `GOFIPS140` default to `GODEBUG=fips140=on` at runtime.
+
 ## Custom Registries
 
 `distrogen` comes with a [registry embedded in the binary](./registry.yaml) that contains all [opentelemetry-collector](https://github.com/open-telemetry/opentelemetry-collector/blob/main/versions.yaml) and [opentelemetry-collector-contrib](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/versions.yaml) components. If you would like to provide components in other locations (local or in other repositories) you can provide your own registry files that will get merged with the embedded registry. If you provide any components with the same name, the component from your custom registry will override the entry in the embedded registry.

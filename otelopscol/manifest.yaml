@@ -50,8 +50,6 @@ receivers:
 processors:
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor v0.165.0
   path: ../components/otelopscol/processor/agentmetricsprocessor
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/casttosumprocessor v0.165.0
-  path: ../components/otelopscol/processor/casttosumprocessor
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/filterprocessor v0.165.0
   path: ../components/otelopscol/processor/filterprocessor
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.165.0
@@ -100,7 +98,6 @@ replaces:
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/nvmlreceiver => ../../components/otelopscol/receiver/nvmlreceiver
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/varnishreceiver => ../../components/otelopscol/receiver/varnishreceiver
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor => ../../components/otelopscol/processor/agentmetricsprocessor
-- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/casttosumprocessor => ../../components/otelopscol/processor/casttosumprocessor
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/filterprocessor => ../../components/otelopscol/processor/filterprocessor
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor => ../../components/otelopscol/processor/normalizesumsprocessor
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor => ../../components/otelopscol/processor/transformprocessor

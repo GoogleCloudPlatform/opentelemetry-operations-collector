@@ -77,7 +77,6 @@ components:
     - metricstarttime
     # Within this repo
     - agentmetrics
-    - casttosum
     - normalizesums
   exporters:
     - file

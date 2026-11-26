@@ -1,0 +1,17 @@
+name: basic-distro
+
+gofips140: ../bad
+
+display_name: Basic OTel
+version: 0.121.0
+opentelemetry_version: 0.121.0
+binary_name: otelcol-basic
+go_version: 1.24.0
+
+components:
+  receivers:
+    - otlp
+  exporters:
+    - otlp
+  providers:
+    - yaml

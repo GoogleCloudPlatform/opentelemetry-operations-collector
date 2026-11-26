@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -45,7 +46,8 @@ const (
 )
 
 var (
-	VersionRegex = regexp.MustCompile(`^(\d+\.\d+\.\d+)(?:-([^.]+)\.(\d+))?$`)
+	VersionRegex          = regexp.MustCompile(`^(\d+\.\d+\.\d+)(?:-([^.]+)\.(\d+))?$`)
+	goFIPS140VersionRegex = regexp.MustCompile(`^(off|latest|certified|inprocess|v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$`)
 )
 
 const (
@@ -78,6 +80,7 @@ type DistributionSpec struct {
 	BinaryName                  string                  `yaml:"binary_name"`
 	BuildTags                   string                  `yaml:"build_tags"`
 	BoringCrypto                bool                    `yaml:"boringcrypto"`
+	GoFIPS140                   string                  `yaml:"gofips140,omitempty"`
 	DockerRepo                  string                  `yaml:"docker_repo"`
 	Components                  *DistributionComponents `yaml:"components"`
 	Replaces                    ComponentReplaces       `yaml:"replaces,omitempty"`
@@ -175,9 +178,58 @@ func (s *DistributionSpec) Query(field string) (string, error) {
 var (
 	ErrSpecValidationBoringCryptoWithoutCGO        = errors.New("boringcrypto build is not possible with collector_cgo turned off")
 	ErrSpecValidationBoringCryptoWithoutDebian     = errors.New("boringcrypto is only possible with the debian build container")
+	ErrSpecValidationBoringCryptoAndGoFIPS140      = errors.New("cannot enable both boringcrypto and gofips140")
+	ErrSpecValidationInvalidGoFIPS140              = errors.New("invalid gofips140 value")
+	ErrSpecValidationGoFIPS140WithPureGo           = errors.New("gofips140 cannot be combined with the purego build tag")
+	ErrSpecValidationGoFIPS140UnsupportedGoVersion = errors.New("gofips140 requires go_version 1.24 or later")
 	ErrSpecValidationVendorDepsWithoutPermanentOCB = errors.New("vendor_dependencies is only possible with permanent_ocb_directory set to true")
 	ErrSpecValidationMissingOTelVersion            = errors.New("opentelemetry_version is required")
 )
+
+// GoFIPS140Enabled reports whether Go's native FIPS 140-3 mode (GOFIPS140) is
+// enabled for this distribution.
+func (s *DistributionSpec) GoFIPS140Enabled() bool {
+	return s.GoFIPS140 != "" && s.GoFIPS140 != "off"
+}
+
+func (s *DistributionSpec) validateGoFIPS140() error {
+	s.GoFIPS140 = strings.TrimSpace(s.GoFIPS140)
+	if s.GoFIPS140 == "" {
+		return nil
+	}
+	if !goFIPS140VersionRegex.MatchString(s.GoFIPS140) {
+		return fmt.Errorf("%w: %q (expected off, latest, certified, inprocess, or vX.Y.Z)", ErrSpecValidationInvalidGoFIPS140, s.GoFIPS140)
+	}
+	if !s.GoFIPS140Enabled() {
+		return nil
+	}
+	if s.BoringCrypto {
+		return ErrSpecValidationBoringCryptoAndGoFIPS140
+	}
+	if slices.Contains(s.BuildTagsList(), "purego") {
+		return ErrSpecValidationGoFIPS140WithPureGo
+	}
+	if s.GoVersion != "" && !goVersionSupportsFIPS140(s.GoVersion) {
+		return fmt.Errorf("%w: got %s", ErrSpecValidationGoFIPS140UnsupportedGoVersion, s.GoVersion)
+	}
+	return nil
+}
+
+func goVersionSupportsFIPS140(goVersion string) bool {
+	parts := strings.Split(strings.TrimPrefix(goVersion, "go"), ".")
+	if len(parts) < 2 {
+		return false
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return false
+	}
+	return major > 1 || (major == 1 && minor >= 24)
+}
 
 // NewDistributionSpec loads the DistributionSpec from a yaml file.
 func NewDistributionSpec(path string) (*DistributionSpec, error) {
@@ -201,6 +253,10 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 		if spec.BuildContainer != Debian {
 			return nil, fmt.Errorf("%w, build_container was set to %s", ErrSpecValidationBoringCryptoWithoutDebian, spec.BuildContainer)
 		}
+	}
+
+	if err := spec.validateGoFIPS140(); err != nil {
+		return nil, err
 	}
 
 	// The name of the spec.yaml file might be different from the binary name

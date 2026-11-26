@@ -1,0 +1,9 @@
+ARG WINDOWS_VERSION=2019
+ARG WINBASE=mcr.microsoft.com/windows/servercore:ltsc${WINDOWS_VERSION}
+FROM ${WINBASE} AS windows
+
+COPY otelcol-basic.exe /otelcol-basic.exe
+COPY config.yaml /etc/otelcol-basic/config.yaml
+
+ENTRYPOINT ["/otelcol-basic.exe", "--feature-gates=exporter.googlemanagedprometheus.intToDouble"]
+CMD ["--config=/etc/otelcol-basic/config.yaml"]

@@ -272,7 +272,7 @@ func TestRetrieve_XDSServerUnreachable(t *testing.T) {
 
 	// Port 1 on loopback: nothing is listening, so the stream can never be
 	// established and the manager is left retrying with backoff.
-	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:xds://127.0.0.1:1?project=my-project&insecure=true", nil)
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:xds://127.0.0.1:1?project=my-project&region=us-central1&insecure=true", nil)
 	require.NoError(t, err, "an unreachable xDS control plane must not block collector startup")
 	require.NotNil(t, ret)
 
@@ -291,12 +291,28 @@ func TestRetrieve_XDSServerUnreachable(t *testing.T) {
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
+// TestRetrieve_XDSMissingRegion asserts that an xds:// URI no region can be
+// resolved for fails Retrieve instead of starting on an assumed region.
+func TestRetrieve_XDSMissingRegion(t *testing.T) {
+	withFakeGCEMetadata(t)
+	t.Setenv("FLEET_ID", "1234")
+	t.Setenv("CLOUD_REGION", "")
+	t.Setenv("GOOGLE_CLOUD_REGION", "")
+	p := createProvider()
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:xds://127.0.0.1:1?project=my-project&insecure=true", nil)
+	require.ErrorIs(t, err, googlepolicy.ErrXDSMissingRegion)
+	assert.Nil(t, ret)
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
 func TestRetrieve_XDSNumericProjectDoesNotClobberProjectID(t *testing.T) {
 	withFakeGCEMetadata(t)
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
-	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:xds://127.0.0.1:1?project=123456789012&insecure=true", nil)
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:xds://127.0.0.1:1?project=123456789012&region=us-central1&insecure=true", nil)
 	require.NoError(t, err)
 	require.NotNil(t, ret)
 
@@ -315,7 +331,7 @@ func TestRetrieve_XDSNumericProjectDoesNotClobberProjectID(t *testing.T) {
 			}
 		}
 	}
-	assert.Equal(t, "projects/123456789012/locations/asia-east1/fleets/1234", gotFleetID)
+	assert.Equal(t, "projects/123456789012/locations/us-central1/fleets/1234", gotFleetID)
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -395,15 +411,6 @@ func TestRetrieve_WorkloadResourceFallbacks(t *testing.T) {
 		want []string
 	}{
 		{
-			name: "project query parameter, default region",
-			uri:  "googlecontrolplane:xds://127.0.0.1:1?project=my-project&insecure=true",
-			want: []string{
-				workloadProjectIDStatementFromAccount,
-				projectStatement("my-project"),
-				regionStatement("asia-east1"),
-			},
-		},
-		{
 			name: "region query parameter",
 			uri:  "googlecontrolplane:xds://127.0.0.1:1?project=my-project&region=europe-west3&insecure=true",
 			want: []string{
@@ -433,10 +440,10 @@ func TestRetrieve_WorkloadResourceFallbacks(t *testing.T) {
 		},
 		{
 			name: "numeric project only",
-			uri:  "googlecontrolplane:xds://127.0.0.1:1?project=123456789012&insecure=true",
+			uri:  "googlecontrolplane:xds://127.0.0.1:1?project=123456789012&region=europe-west3&insecure=true",
 			want: []string{
 				workloadProjectIDStatementFromAccount,
-				regionStatement("asia-east1"),
+				regionStatement("europe-west3"),
 			},
 		},
 	} {

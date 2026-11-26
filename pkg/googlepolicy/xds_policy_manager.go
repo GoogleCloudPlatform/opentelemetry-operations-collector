@@ -138,11 +138,6 @@ const (
 	cloudRegionEnvVar              = "CLOUD_REGION"
 	googleCloudRegionEnvVar        = "GOOGLE_CLOUD_REGION"
 
-	// defaultRegion is the fallback locality region reported to the control
-	// plane and embedded in the xdstp:// authority when neither the URI, the
-	// environment, nor GCE metadata supplies a region.
-	defaultRegion = "asia-east1"
-
 	// defaultMetadataTimeout bounds GCE metadata queries during manager
 	// construction so an unresponsive metadata server cannot stall startup.
 	defaultMetadataTimeout = 1500 * time.Millisecond
@@ -176,6 +171,7 @@ var (
 	ErrXDSMissingFleetID      = errors.New("a fleet ID is required for the xDS policy manager: set the FLEET_ID environment variable or the 'gcp.fleet_id' URI query parameter")
 	ErrXDSInvalidFleetID      = errors.New("invalid fleet ID: expected a short fleet ID or a full resource name 'projects/{project}/locations/{location}/fleets/{fleet_id}'")
 	ErrXDSMissingProject      = errors.New("a project is required for the xDS policy manager: set the 'project_number' or 'project' URI query parameter, GOOGLE_CLOUD_PROJECT_NUMBER / GOOGLE_CLOUD_PROJECT environment variable, or run on GCE")
+	ErrXDSMissingRegion       = errors.New("a region is required for the xDS policy manager: set the 'region' URI query parameter or the CLOUD_REGION / GOOGLE_CLOUD_REGION environment variable, use a full fleet resource name 'projects/{project}/locations/{location}/fleets/{fleet_id}', or run on GCE")
 	ErrXDSInvalidInsecureFlag = errors.New("invalid 'insecure' URI query parameter, expected a boolean")
 
 	// Lifecycle errors.
@@ -337,8 +333,10 @@ type xdsPolicyManager struct {
 //	                 xdstp:// subscription in non-GCE / test environments) or
 //	                 numeric project number.
 //	region         - optional. GCP region for the xdstp:// authority and node
-//	                 locality; falls back to $CLOUD_REGION / $GOOGLE_CLOUD_REGION,
-//	                 the GCE instance zone, and finally defaultRegion.
+//	                 locality. The location of a full Fleet resource name and
+//	                 $CLOUD_REGION / $GOOGLE_CLOUD_REGION take precedence over
+//	                 it; the GCE instance zone is the fallback. With none of
+//	                 these, the constructor fails with ErrXDSMissingRegion.
 //	insecure       - optional bool, default false. False connects with TLS 1.2+ and
 //	                 an ADC-derived ID token per RPC; true connects in plaintext with
 //	                 no credentials, which is intended for local control planes.
@@ -569,7 +567,7 @@ func resolveProjectAndLocality(query url.Values, fleetLocation string) (projectN
 		return "", "", "", "", ErrXDSMissingProject
 	}
 	if region == "" {
-		region = defaultRegion
+		return "", "", "", "", ErrXDSMissingRegion
 	}
 	return projectNumber, projectID, region, zone, nil
 }
@@ -750,7 +748,7 @@ func (m *xdsPolicyManager) ProjectID() string {
 
 // Region returns the resolved GCP region: the location of a full Fleet
 // resource name, $CLOUD_REGION / $GOOGLE_CLOUD_REGION, the `region` URI
-// parameter, the GCE instance's region, or defaultRegion, in that order.
+// parameter, or the GCE instance's region, in that order.
 func (m *xdsPolicyManager) Region() string {
 	return m.region
 }

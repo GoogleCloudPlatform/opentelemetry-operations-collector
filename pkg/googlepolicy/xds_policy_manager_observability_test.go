@@ -182,7 +182,7 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
 
 	dialOpt := startFakeADSServer(t, srv)
-	uri, err := url.Parse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=my-project&insecure=true")
+	uri, err := url.Parse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=my-project&region=" + testRegion + "&insecure=true")
 	require.NoError(t, err)
 
 	mgr, err := NewXDSPolicyManager(zap.NewNop(), uri, "collector-abc", WithMeterProvider(mp))
@@ -307,7 +307,7 @@ func TestXDSPolicyManager_Logging(t *testing.T) {
 	}
 
 	dialOpt := startFakeADSServer(t, srv)
-	uri, err := url.Parse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=my-project&insecure=true")
+	uri, err := url.Parse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=my-project&region=" + testRegion + "&insecure=true")
 	require.NoError(t, err)
 
 	mgr, err := NewXDSPolicyManager(logger, uri, "collector-abc")

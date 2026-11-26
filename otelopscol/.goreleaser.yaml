@@ -9,6 +9,7 @@ env:
   - CGO_ENABLED=0 # TODO: CGO is not supported in goreleaser yet.
   - BUILD_FLAGS=-trimpath
   - GOWORK=off
+  - GOFIPS140=v1.26.0
 
 builds:
   - id: otelopscol-linux

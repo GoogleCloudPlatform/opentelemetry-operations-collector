@@ -11,6 +11,7 @@ go_version: 1.26.10
 binary_name: otelopscol
 build_tags: gpu,remove_all_sd,enable_gce_sd,enable_kubernetes_sd
 boringcrypto: false
+gofips140: v1.26.0
 docker_repo: ""
 components:
     receivers:

@@ -152,6 +152,11 @@ const (
 	LogQueryMaxAttempts        = 15 // 7 minutes 30 seconds total.
 	queryMaxAttemptsLogMissing = 10 // 5 minutes total.
 	logQueryBackoffDuration    = 30 * time.Second
+	// logQueryAttemptTimeout bounds a single Cloud Logging ListLogEntries attempt
+	// (including pagination). Passing the 2-hour test context directly to
+	// logClient.Entries causes gax-go to skip its default 60s timeout and can hang
+	// a single attempt until the test context expires.
+	logQueryAttemptTimeout = 60 * time.Second
 
 	// traceQueryDerate is the number of backoff durations to wait before retrying a trace query.
 	// Cloud Trace quota is incredibly low, and each call to ListTraces uses 25 quota tokens.
@@ -666,7 +671,9 @@ func findMatchingLogsScoped(ctx context.Context, logger *log.Logger, vm *VM, inc
 	if err != nil {
 		return nil, fmt.Errorf("findMatchingLogs() failed to obtain logClient for project %v: %v", vm.Project, err)
 	}
-	it := logClient.Entries(ctx, logadmin.Filter(filter))
+	attemptCtx, cancel := context.WithTimeout(ctx, logQueryAttemptTimeout)
+	defer cancel()
+	it := logClient.Entries(attemptCtx, logadmin.Filter(filter))
 
 	var matchingLogs []*cloudlogging.Entry
 	// Loop through the iterator printing out each matching log entry.
@@ -707,7 +714,14 @@ func WaitForProjectLog(ctx context.Context, logger *log.Logger, vm *VM, logNameR
 	return err
 }
 
-func shouldRetryHasMatchingLog(err error) bool {
+func shouldRetryHasMatchingLog(ctx context.Context, err error) bool {
+	if err == nil || ctx.Err() != nil {
+		return false
+	}
+	// Retry per-attempt or backend timeouts while the caller's context is still active.
+	if errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded {
+		return true
+	}
 	// Logging API queries can hit quota, especially when multiple people are running tests.
 	return strings.Contains(err.Error(), "Quota") ||
 		// Rarely, a log query fails due to internal errors in the logging API.
@@ -715,6 +729,7 @@ func shouldRetryHasMatchingLog(err error) bool {
 }
 
 func queryLogScoped(ctx context.Context, logger *log.Logger, vm *VM, includeInstanceID bool, logNameRegex string, window time.Duration, query string, maxAttempts int) (*cloudlogging.Entry, error) {
+	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		matchingLogs, err := findMatchingLogsScoped(ctx, logger, vm, includeInstanceID, logNameRegex, window, query)
 		found := len(matchingLogs) > 0
@@ -723,12 +738,24 @@ func queryLogScoped(ctx context.Context, logger *log.Logger, vm *VM, includeInst
 			return matchingLogs[0], nil
 		}
 		logger.Printf("Query returned found=%t, matchingLogs=%v, err=%v, attempt=%d", found, matchingLogs, err, attempt)
-		if err != nil && !shouldRetryHasMatchingLog(err) {
+		if err != nil && !shouldRetryHasMatchingLog(ctx, err) {
 			// A non-retryable error.
-			return nil, fmt.Errorf("QueryLog() failed: %v", err)
+			return nil, fmt.Errorf("QueryLog() failed: %w", err)
 		}
+		lastErr = err
 		// found was false, or we hit a retryable error.
-		time.Sleep(logQueryBackoffDuration)
+		if attempt < maxAttempts {
+			timer := time.NewTimer(logQueryBackoffDuration)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, fmt.Errorf("QueryLog() failed: %w", ctx.Err())
+			case <-timer.C:
+			}
+		}
+	}
+	if lastErr != nil {
+		return nil, fmt.Errorf("QueryLog() failed: %s exhausted retries, last error: %w", logNameRegex, lastErr)
 	}
 	return nil, fmt.Errorf("QueryLog() failed: %s not found, exhausted retries", logNameRegex)
 }
@@ -742,6 +769,7 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 }
 
 func queryAllLogsScoped(ctx context.Context, logger *log.Logger, vm *VM, includeInstanceID bool, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
+	var lastErr error
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		matchingLogs, err := findMatchingLogsScoped(ctx, logger, vm, includeInstanceID, logNameRegex, window, query)
 		if err == nil {
@@ -749,12 +777,24 @@ func queryAllLogsScoped(ctx context.Context, logger *log.Logger, vm *VM, include
 			return matchingLogs, nil
 		}
 		logger.Printf("Query returned matchingLogs=%v, err=%v, attempt=%d", matchingLogs, err, attempt)
-		if !shouldRetryHasMatchingLog(err) {
+		if !shouldRetryHasMatchingLog(ctx, err) {
 			// A non-retryable error.
-			return nil, fmt.Errorf("QueryAllLogs() failed: %v", err)
+			return nil, fmt.Errorf("QueryAllLogs() failed: %w", err)
 		}
-		// found was false, or we hit a retryable error.
-		time.Sleep(logQueryBackoffDuration)
+		lastErr = err
+		// Hit a retryable error.
+		if attempt < maxAttempts {
+			timer := time.NewTimer(logQueryBackoffDuration)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, fmt.Errorf("QueryAllLogs() failed: %w", ctx.Err())
+			case <-timer.C:
+			}
+		}
+	}
+	if lastErr != nil {
+		return nil, fmt.Errorf("QueryAllLogs() failed: %s no succesful queries to the backend, exhausted retries, last error: %w", logNameRegex, lastErr)
 	}
 	return nil, fmt.Errorf("QueryAllLogs() failed: %s no succesful queries to the backend, exhausted retries", logNameRegex)
 }

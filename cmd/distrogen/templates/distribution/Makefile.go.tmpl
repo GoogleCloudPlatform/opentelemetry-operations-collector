@@ -13,6 +13,9 @@ COLLECTOR_BUILD_DIR = $(PWD)/{{ .OCBOutputDir }}
 COLLECTOR_CGO = {{ if .CollectorCGO }}1{{else}}0{{end}}
 COLLECTOR_BUILDVCS ?= false
 COLLECTOR_BUILD_TAGS ?= {{ .BuildTags }}
+{{- if .GoFIPS140Enabled }}
+COLLECTOR_GOFIPS140 ?= {{ .GoFIPS140 }}
+{{- end }}
 
 {{ if ne .DockerRepo "" -}}
 DOCKER_REPO ?= {{ .DockerRepo }}
@@ -157,6 +160,8 @@ $(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 	cd $(COLLECTOR_BUILD_DIR) && \
 		{{ if .BoringCrypto -}}
 		GOEXPERIMENT=boringcrypto \
+		{{ else if .GoFIPS140Enabled -}}
+		GOFIPS140=$(COLLECTOR_GOFIPS140) \
 		{{ end -}}
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
@@ -172,6 +177,9 @@ $(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 # Note: distrogen currently does not support BoringCrypto and CGO for Windows builds.
 $(COLLECTOR_BINARY_NAME_EXE): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 	cd $(COLLECTOR_BUILD_DIR) && \
+		{{ if .GoFIPS140Enabled -}}
+		GOFIPS140=$(COLLECTOR_GOFIPS140) \
+		{{ end -}}
 		CGO_ENABLED=0 \
 		GOOS=windows GOARCH=$(TARGETARCH) \
 		$(GO_COMMAND_ENV) $(GO_BIN) build \

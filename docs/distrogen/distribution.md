@@ -32,6 +32,7 @@ If you need to programmatically update fields in the `spec.yaml` without opening
 | `version` | string | | The version of the distribution. This is the version that gets printed out if you call `--version` on the resulting binary, and will be used as the version of the pushed image. |
 | `go_version` | string | | The Go version to use. This gets used if you leverage the automatic Go installation in the distribution build process. |
 | `boringcrypto` | bool | false | Whether to build the binary with [BoringCrypto](https://csrc.nist.gov/CSRC/media/projects/cryptographic-module-validation-program/documents/security-policies/140sp3678.pdf). |
+| `gofips140` | string | | Optional [Go native FIPS 140-3](https://go.dev/doc/security/fips140) build setting (`GOFIPS140`), e.g. `v1.0.0`, `v1.26.0`, `certified`, `inprocess`, `latest`, or `off`. Propagated to `make build`, `make build-win`, and `.goreleaser.yaml`. Requires Go 1.24+ and cannot be combined with `boringcrypto`. |
 | `collector_cgo` | bool | false | Whether to build the binary with `CGO_ENABLED=1`. This must be true if `boringcrypto` is turned on. |
 | `build_container` | enum | `debian` | The base to use for the `Dockerfile.build` container's build layer. Only `debian` and `alpine` are supported right now. |
 | `feature_gates` | string[] | | The [`featuregates`](https://github.com/open-telemetry/opentelemetry-collector/tree/main/featuregate) to enable in the Collector. This is leveraged in the default `ENTRYPOINT` of image builds. |
@@ -63,6 +64,7 @@ Leverages [Build Platform Variables](#build-platform-variables).
 | `COLLECTOR_LD_FLAGS_STRIP` | Controls whether the binary is stripped/debuggable. | `-s -w`, i.e. stripped by default. If you need a debuggable binary, provide this variable as an empty value. |
 | `COLLECTOR_LD_FLAGS_STATIC_LINK` | Controls whether the external static linking flags are provided. | If `boringcrypto` distro spec field is `true`, set to `-linkmode=external -extldflags=-static` i.e. the binary is statically linked by default. If you would prefer dynamic linking, provide this variable as an empty value. |
 | `COLLECTOR_LD_FLAGS` | Additional values for Go's `-ldflags` value. | Empty. |
+| `COLLECTOR_GOFIPS140` | Override `GOFIPS140` value for `make build` and `make build-win` (generated when `gofips140` is enabled). | `gofips140` from distro spec. |
 
 ### goreleaser
 

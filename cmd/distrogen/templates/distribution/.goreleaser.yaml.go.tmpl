@@ -9,6 +9,9 @@ env:
   - CGO_ENABLED=0 # TODO: CGO is not supported in goreleaser yet.
   - BUILD_FLAGS=-trimpath
   - GOWORK=off
+{{- if .GoFIPS140Enabled }}
+  - GOFIPS140={{ .GoFIPS140 }}
+{{- end }}
 
 builds:
   - id: {{ .BinaryName }}-linux

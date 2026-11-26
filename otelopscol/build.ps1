@@ -147,7 +147,7 @@ function Build-WindowsCollector {
         }
 
         $buildCollectorCommand = @"
-`$env:GOWORK='off'; `$env:CGO_ENABLED=1; cd _build; $goBin build -p 32 -buildvcs=false -tags 'remove_all_sd,enable_gce_sd,enable_kubernetes_sd' -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' --gcflags="all=-l" .
+`$env:GOWORK='off'; `$env:CGO_ENABLED=1; `$env:GOFIPS140='v1.26.0'; cd _build; $goBin build -p 32 -buildvcs=false -tags 'remove_all_sd,enable_gce_sd,enable_kubernetes_sd' -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' --gcflags="all=-l" .
 "@ -f $outDir, $ldFlags
         Run-Command $buildCollectorCommand
         Write-Host "Build complete."

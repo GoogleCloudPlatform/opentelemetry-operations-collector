@@ -219,6 +219,90 @@ func TestPredicateEquals(t *testing.T) {
 	})
 }
 
+func TestExactInt64Float64Comparisons(t *testing.T) {
+	const pow53 int64 = 1 << 53
+	pow53Float := float64(pow53)
+	doubleVal := func(v float64) *policyv1.Value {
+		return &policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: v}}
+	}
+
+	tests := []struct {
+		name      string
+		predicate *policyv1.Predicate
+		val       any
+		want      bool
+	}{
+		// Above 2^53: int64 target vs double_value predicate
+		{"2^53+1 equals double(2^53) is false", predEquals(doubleVal(pow53Float)), pow53 + 1, false},
+		{"2^53 equals double(2^53) is true", predEquals(doubleVal(pow53Float)), pow53, true},
+		{"2^53-1 equals double(2^53) is false", predEquals(doubleVal(pow53Float)), pow53 - 1, false},
+		{"2^53+1 gt double(2^53) is true", predGt(doubleNumeric(pow53Float)), pow53 + 1, true},
+		{"2^53+1 lte double(2^53) is false", predLte(doubleNumeric(pow53Float)), pow53 + 1, false},
+		{"2^53-1 lt double(2^53) is true", predLt(doubleNumeric(pow53Float)), pow53 - 1, true},
+		{"-(2^53+1) equals double(-2^53) is false", predEquals(doubleVal(-pow53Float)), -pow53 - 1, false},
+		{"-(2^53+1) lt double(-2^53) is true", predLt(doubleNumeric(-pow53Float)), -pow53 - 1, true},
+
+		// Above 2^53: float64 target vs int_value predicate
+		{"double(2^53) equals int(2^53+1) is false", predEquals(intValue(pow53 + 1)), pow53Float, false},
+		{"double(2^53) equals int(2^53) is true", predEquals(intValue(pow53)), pow53Float, true},
+		{"double(2^53) lt int(2^53+1) is true", predLt(intNumeric(pow53 + 1)), pow53Float, true},
+		{"double(2^53) gte int(2^53+1) is false", predGte(intNumeric(pow53 + 1)), pow53Float, false},
+		{"double(-2^53) gt int(-(2^53+1)) is true", predGt(intNumeric(-pow53 - 1)), -pow53Float, true},
+
+		// 64-bit boundary values around MinInt64 and MaxInt64
+		{"MaxInt64 equals double(2^63) is false", predEquals(doubleVal(0x1p63)), int64(math.MaxInt64), false},
+		{"MaxInt64 lt double(2^63) is true", predLt(doubleNumeric(0x1p63)), int64(math.MaxInt64), true},
+		{"MaxInt64 gt nextafter(2^63, 0) is true", predGt(doubleNumeric(math.Nextafter(0x1p63, 0))), int64(math.MaxInt64), true},
+		{"double(2^63) gt MaxInt64 is true", predGt(intNumeric(math.MaxInt64)), float64(0x1p63), true},
+		{"double(2^63) equals MaxInt64 is false", predEquals(intValue(math.MaxInt64)), float64(0x1p63), false},
+		{"MinInt64 equals double(-2^63) is true", predEquals(doubleVal(-0x1p63)), int64(math.MinInt64), true},
+		{"MinInt64+1 equals double(-2^63) is false", predEquals(doubleVal(-0x1p63)), int64(math.MinInt64) + 1, false},
+		{"MinInt64+1 gt double(-2^63) is true", predGt(doubleNumeric(-0x1p63)), int64(math.MinInt64) + 1, true},
+		{"MinInt64 gt nextafter(-2^63, -Inf) is true", predGt(doubleNumeric(math.Nextafter(-0x1p63, math.Inf(-1)))), int64(math.MinInt64), true},
+		{"double(-2^63) equals MinInt64 is true", predEquals(intValue(math.MinInt64)), float64(-0x1p63), true},
+		{"double(-2^63) lt MinInt64+1 is true", predLt(intNumeric(math.MinInt64 + 1)), float64(-0x1p63), true},
+
+		// Fractional, negative-zero, and subnormal values
+		{"int(0) equals -0.0 is true", predEquals(doubleVal(math.Copysign(0, -1))), int64(0), true},
+		{"-0.0 equals int(0) is true", predEquals(intValue(0)), math.Copysign(0, -1), true},
+		{"int(1) lt 1.5 is true", predLt(doubleNumeric(1.5)), int64(1), true},
+		{"int(2) gt 1.5 is true", predGt(doubleNumeric(1.5)), int64(2), true},
+		{"int(-1) gt -1.5 is true", predGt(doubleNumeric(-1.5)), int64(-1), true},
+		{"int(-2) lt -1.5 is true", predLt(doubleNumeric(-1.5)), int64(-2), true},
+		{"int(0) gt -0.5 is true", predGt(doubleNumeric(-0.5)), int64(0), true},
+		{"int(-1) lt -0.5 is true", predLt(doubleNumeric(-0.5)), int64(-1), true},
+		{"int(0) lt SmallestNonzeroFloat64 is true", predLt(doubleNumeric(math.SmallestNonzeroFloat64)), int64(0), true},
+		{"int(0) gt -SmallestNonzeroFloat64 is true", predGt(doubleNumeric(-math.SmallestNonzeroFloat64)), int64(0), true},
+		{"-1.5 lt int(-1) is true", predLt(intNumeric(-1)), -1.5, true},
+		{"-1.5 gt int(-2) is true", predGt(intNumeric(-2)), -1.5, true},
+
+		// Runtime ±Inf targets
+		{"+Inf gt MaxInt64 is true", predGt(intNumeric(math.MaxInt64)), math.Inf(1), true},
+		{"-Inf lt MinInt64 is true", predLt(intNumeric(math.MinInt64)), math.Inf(-1), true},
+		{"+Inf equals MaxInt64 is false", predEquals(intValue(math.MaxInt64)), math.Inf(1), false},
+
+		// Large uint64 values (> MaxInt64) do not overflow to negative
+		{"MaxUint64 gt MaxInt64 is true", predGt(intNumeric(math.MaxInt64)), uint64(math.MaxUint64), true},
+		{"MaxUint64 equals -1 is false", predEquals(intValue(-1)), uint64(math.MaxUint64), false},
+		{"MaxUint64 lt double(2^64) is true", predLt(doubleNumeric(0x1p64)), uint64(math.MaxUint64), true},
+		{"MaxUint64 equals double(2^64) is false", predEquals(doubleVal(0x1p64)), uint64(math.MaxUint64), false},
+		{"uint64(2^63) equals double(2^63) is true", predEquals(doubleVal(0x1p63)), uint64(1) << 63, true},
+		{"uint64(2^63+1) gt double(2^63) is true", predGt(doubleNumeric(0x1p63)), (uint64(1) << 63) + 1, true},
+
+		// Slice containment uses exact numeric equality
+		{"slice contains double(2^53) does not match int(2^53+1)", predContains(doubleVal(pow53Float)), []any{pow53 + 1}, false},
+		{"slice contains double(2^53) matches int(2^53)", predContains(doubleVal(pow53Float)), []any{pow53}, true},
+		{"slice contains int(2^53+1) does not match double(2^53)", predContains(intValue(pow53 + 1)), []any{pow53Float}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pred := mustCompile(t, tt.predicate)
+			assert.Equal(t, tt.want, pred(tt.val, true))
+		})
+	}
+}
+
 func TestPredicateNumericComparisons(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -351,9 +435,25 @@ func TestEvalPath(t *testing.T) {
 func TestValueToAny(t *testing.T) {
 	mapVal := pcommon.NewValueMap()
 	mapVal.Map().PutStr("k", "v")
-	// Maps have no plain Go analogue the predicates can compare, so they fall
-	// back to their string rendering.
-	assert.NotEmpty(t, ValueToAny(mapVal))
+	gotMap := ValueToAny(mapVal)
+	assert.IsType(t, pcommon.Map{}, gotMap)
+	_, isStr := gotMap.(string)
+	assert.False(t, isStr, "ValueTypeMap must not fall back to string representation")
+
+	// Scalar and string predicates must evaluate to false against map values,
+	// while existence evaluates to true.
+	assert.True(t, mustCompile(t, predExists())(gotMap, true))
+	assert.False(t, mustCompile(t, predEquals(strValue(`{"k":"v"}`)))(gotMap, true))
+	assert.False(t, mustCompile(t, predGlob("*"))(gotMap, true))
+	assert.False(t, mustCompile(t, predContains(strValue("k")))(gotMap, true))
+	assert.False(t, mustCompile(t, predGt(intNumeric(0)))(gotMap, true))
+
+	// Map elements inside a slice also never match string containment.
+	sliceWithMap := pcommon.NewValueSlice()
+	sliceWithMap.Slice().AppendEmpty().SetEmptyMap().PutStr("k", "v")
+	gotSliceWithMap := ValueToAny(sliceWithMap)
+	assert.False(t, mustCompile(t, predContains(strValue(`{"k":"v"}`)))(gotSliceWithMap, true))
+	assert.False(t, mustCompile(t, predContains(strValue("k")))(gotSliceWithMap, true))
 
 	sliceVal := pcommon.NewValueSlice()
 	sliceVal.Slice().AppendEmpty().SetStr("a")
@@ -404,11 +504,16 @@ func TestCompareNumericNaN(t *testing.T) {
 		name string
 		pred *policyv1.Predicate
 	}{
-		{"gt", predGt(expected100)},
-		{"gte", predGte(expected100)},
-		{"lt", predLt(expected100)},
-		{"lte", predLte(expected100)},
-		{"equals", predEquals(&policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: 100.0}})},
+		{"gt double", predGt(expected100)},
+		{"gte double", predGte(expected100)},
+		{"lt double", predLt(expected100)},
+		{"lte double", predLte(expected100)},
+		{"equals double", predEquals(&policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: 100.0}})},
+		{"gt int", predGt(intNumeric(100))},
+		{"gte int", predGte(intNumeric(100))},
+		{"lt int", predLt(intNumeric(100))},
+		{"lte int", predLte(intNumeric(100))},
+		{"equals int", predEquals(intValue(100))},
 	}
 
 	for _, tc := range predicates {

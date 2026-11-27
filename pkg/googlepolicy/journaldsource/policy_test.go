@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestPolicy_Validation(t *testing.T) {
@@ -157,6 +158,18 @@ func TestDriver_LoadPolicy(t *testing.T) {
 		require.NotNil(t, p)
 		assert.Equal(t, "my-journald", p.PolicyName())
 		assert.Equal(t, PolicyType, p.PolicyType())
+		jp, ok := p.(*Policy)
+		require.True(t, ok)
+		assert.True(t, proto.Equal(&policyv1.JournaldSourcePolicy{Id: "my-journald"}, jp.Proto()))
+		assert.Nil(t, (*Policy)(nil).Proto())
+	})
+
+	t.Run("duplicate policy IDs deduplicate when identical", func(t *testing.T) {
+		t.Parallel()
+		raw := map[string]any{"type": PolicyType, "id": "journald-dup"}
+		psSame, err := googlepolicy.MakePolicySet("rev-same", []map[string]any{raw, raw})
+		require.NoError(t, err)
+		assert.Len(t, psSame.Policies, 1)
 	})
 
 	t.Run("load from missing id", func(t *testing.T) {

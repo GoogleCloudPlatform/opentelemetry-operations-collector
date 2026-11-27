@@ -1046,12 +1046,16 @@ func TestFilterLogUnknownActionFailsClosed(t *testing.T) {
 
 // TestLogBodyValueTypes pins LOG_RECORD_FIELD_BODY across every pcommon value
 // type a body can carry. Scalars surface as their plain Go counterparts, slices
-// as []any (so `contains` means membership), and maps fall through
-// matcher.ValueToAny's default arm to their canonical JSON spelling.
+// as []any (so `contains` means membership), and maps return a non-string
+// pcommon.Map so scalar/string predicates evaluate to false while existence is
+// true.
 func TestLogBodyValueTypes(t *testing.T) {
 	scope := plog.NewScopeLogs()
 	res := plog.NewResourceLogs()
 	bodyTarget := recordFieldTarget(policyv1.LogRecordField_LOG_RECORD_FIELD_BODY)
+
+	expectedMapBody := pcommon.NewMap()
+	expectedMapBody.PutStr("env", "prod")
 
 	tests := []struct {
 		name       string
@@ -1135,14 +1139,44 @@ func TestLogBodyValueTypes(t *testing.T) {
 			wantMatch:  false,
 		},
 		{
-			name: "map body renders as json",
+			name: "map body exists",
 			setBody: func(v pcommon.Value) {
 				v.SetEmptyMap().PutStr("env", "prod")
 			},
-			wantValue:  `{"env":"prod"}`,
+			wantValue:  expectedMapBody,
+			wantExists: true,
+			predicate:  &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
+			wantMatch:  true,
+		},
+		{
+			name: "map body does not match string containment",
+			setBody: func(v pcommon.Value) {
+				v.SetEmptyMap().PutStr("env", "prod")
+			},
+			wantValue:  expectedMapBody,
 			wantExists: true,
 			predicate:  containsString(`"env":"prod"`),
-			wantMatch:  true,
+			wantMatch:  false,
+		},
+		{
+			name: "map body does not match string equality",
+			setBody: func(v pcommon.Value) {
+				v.SetEmptyMap().PutStr("env", "prod")
+			},
+			wantValue:  expectedMapBody,
+			wantExists: true,
+			predicate:  equalsString(`{"env":"prod"}`),
+			wantMatch:  false,
+		},
+		{
+			name: "map body does not match glob",
+			setBody: func(v pcommon.Value) {
+				v.SetEmptyMap().PutStr("env", "prod")
+			},
+			wantValue:  expectedMapBody,
+			wantExists: true,
+			predicate:  &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "*"}},
+			wantMatch:  false,
 		},
 		{
 			name:       "empty slice body",

@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
+	"google.golang.org/protobuf/proto"
 )
 
 func int32Ptr(i int32) *int32 {
@@ -247,6 +248,25 @@ func TestDriver_LoadPolicy(t *testing.T) {
 		require.NotNil(t, p)
 		hp := p.(*Policy)
 		assert.Equal(t, int32(20), hp.EffectiveCollectionIntervalSeconds())
+		assert.True(t, proto.Equal(&policyv1.HostMetricsSourcePolicy{
+			Id:                        "my-hostmetrics",
+			CollectionIntervalSeconds: int32Ptr(20),
+		}, hp.Proto()))
+		assert.Nil(t, (*Policy)(nil).Proto())
+	})
+
+	t.Run("duplicate policy IDs deduplicate when identical and fail when conflicting", func(t *testing.T) {
+		t.Parallel()
+		rawA := map[string]any{"type": PolicyType, "id": "hm-dup", "collection_interval_seconds": 30}
+		rawB := map[string]any{"type": PolicyType, "id": "hm-dup", "collection_interval_seconds": 60}
+
+		psSame, err := googlepolicy.MakePolicySet("rev-same", []map[string]any{rawA, rawA})
+		require.NoError(t, err)
+		assert.Len(t, psSame.Policies, 1)
+
+		psConflict, err := googlepolicy.MakePolicySet("rev-conflict", []map[string]any{rawA, rawB})
+		require.ErrorIs(t, err, googlepolicy.ErrDuplicatePolicyID)
+		assert.Empty(t, psConflict.Policies)
 	})
 
 	t.Run("load from map with invalid interval (< 10)", func(t *testing.T) {

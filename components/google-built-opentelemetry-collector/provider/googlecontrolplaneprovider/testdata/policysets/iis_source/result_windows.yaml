@@ -208,7 +208,6 @@ processors:
 receivers:
     iis/googlecontrolplane:
         collection_interval: 60s
-    nop/googlecontrolplane: {}
     otlp/default_self_metrics:
         protocols:
             grpc:
@@ -218,6 +217,12 @@ receivers:
                     server_parameters: {}
                 read_buffer_size: 524288
                 transport: tcp
+    otlp/googlecontrolplane:
+        protocols:
+            grpc:
+                endpoint: 127.0.0.1:4317
+            http:
+                endpoint: 127.0.0.1:4318
 service:
     extensions:
         - googleclientauth/default_gcp_destination
@@ -244,7 +249,7 @@ service:
                 - queue_batch/default_gcp_destination_batch_logs
                 - queue_batch/default_gcp_destination_split_logs
             receivers:
-                - nop/googlecontrolplane
+                - otlp/googlecontrolplane
         metrics/default_self_metrics:
             exporters:
                 - otlp_grpc/default_gcp_destination
@@ -265,7 +270,7 @@ service:
                 - queue_batch/default_gcp_destination_batch_metrics
                 - queue_batch/default_gcp_destination_split_metrics
             receivers:
-                - nop/googlecontrolplane
+                - otlp/googlecontrolplane
                 - iis/googlecontrolplane
         traces/googlecontrolplane:
             exporters:
@@ -277,7 +282,7 @@ service:
                 - queue_batch/default_gcp_destination_batch_traces
                 - queue_batch/default_gcp_destination_split_traces
             receivers:
-                - nop/googlecontrolplane
+                - otlp/googlecontrolplane
     telemetry:
         logs:
             encoding: console

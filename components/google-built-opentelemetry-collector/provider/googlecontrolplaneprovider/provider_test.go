@@ -112,17 +112,23 @@ func TestRetrieve(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, conf)
 
-	// Verify both destination policy and selfmetrics policy configurations are merged
+	// Verify destination policy, selfmetrics policy, and built-in loopback OTLP receiver configurations are merged
 	assert.True(t, conf.IsSet("extensions::googleclientauth/default_gcp_destination"))
 	assert.True(t, conf.IsSet("exporters::otlp_grpc/default_gcp_destination"))
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
-	assert.True(t, conf.IsSet("receivers::nop/googlecontrolplane"))
+	assert.True(t, conf.IsSet("receivers::otlp/googlecontrolplane"))
+	assert.False(t, conf.IsSet("receivers::nop/googlecontrolplane"))
+	assert.Equal(t, "127.0.0.1:4317", conf.Get("receivers::otlp/googlecontrolplane::protocols::grpc::endpoint"))
+	assert.Equal(t, "127.0.0.1:4318", conf.Get("receivers::otlp/googlecontrolplane::protocols::http::endpoint"))
 	assert.True(t, conf.IsSet("service::telemetry::resource::attributes"))
 	assert.True(t, conf.IsSet("service::pipelines::logs/default_self_metrics"))
 	assert.True(t, conf.IsSet("service::pipelines::metrics/default_self_metrics"))
 	assert.True(t, conf.IsSet("service::pipelines::logs/googlecontrolplane"))
 	assert.True(t, conf.IsSet("service::pipelines::metrics/googlecontrolplane"))
 	assert.True(t, conf.IsSet("service::pipelines::traces/googlecontrolplane"))
+	assert.Equal(t, []any{"otlp/googlecontrolplane"}, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"))
+	assert.Equal(t, []any{"otlp/googlecontrolplane"}, conf.Get("service::pipelines::metrics/googlecontrolplane::receivers"))
+	assert.Equal(t, []any{"otlp/googlecontrolplane"}, conf.Get("service::pipelines::traces/googlecontrolplane::receivers"))
 
 	assert.Equal(t, []any{"env", "gcp", "system"}, conf.Get("processors::resourcedetection/default_self_metrics::detectors"))
 	assert.Equal(t, false, conf.Get("processors::resourcedetection/default_self_metrics::override"))
@@ -756,7 +762,7 @@ func TestRetrieve_ActivePolicySetWithOtherSource(t *testing.T) {
 	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::processors"), "transform/googlecontrolplane")
 	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::processors"), "googlepolicy")
 	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"), "otlp/other_source")
-	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"), "nop/googlecontrolplane")
+	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"), "otlp/googlecontrolplane")
 	// Built-in self metrics must bypass googlepolicy processor
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
 	assert.NotContains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "googlepolicy")
@@ -797,7 +803,7 @@ func TestRetrieve_ActivePolicySetWithMultipleSources_CanonicalConsolidation(t *t
 
 	// Both sources must merge into the shared canonical logs/googlecontrolplane pipeline
 	receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-	assert.Contains(t, receivers, "nop/googlecontrolplane")
+	assert.Contains(t, receivers, "otlp/googlecontrolplane")
 	assert.Contains(t, receivers, "otlp/source_1")
 	assert.Contains(t, receivers, "otlp/source_2")
 
@@ -869,7 +875,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 
 		// Receivers must attach to canonical shared logs/googlecontrolplane pipeline
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-		assert.Contains(t, receivers, "nop/googlecontrolplane")
+		assert.Contains(t, receivers, "otlp/googlecontrolplane")
 		assert.Contains(t, receivers, secRecID)
 		assert.Contains(t, receivers, sysmonRecID)
 	} else {
@@ -878,7 +884,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
 		assert.Equal(t, defaultStorageDir(), conf.Get("extensions::file_storage/googlecontrolplane::directory"))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-		assert.Contains(t, receivers, "nop/googlecontrolplane")
+		assert.Contains(t, receivers, "otlp/googlecontrolplane")
 		assert.NotContains(t, receivers, secRecID)
 		assert.NotContains(t, receivers, sysmonRecID)
 	}
@@ -947,7 +953,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyConsolidat
 
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 		expectedReceivers := []any{
-			"nop/googlecontrolplane",
+			"otlp/googlecontrolplane",
 			appRecID,
 			secRecID,
 			sysRecID,
@@ -967,7 +973,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyConsolidat
 		assert.False(t, conf.IsSet("receivers::"+secRecID))
 		assert.False(t, conf.IsSet("receivers::"+sysRecID))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-		assert.Equal(t, []any{"nop/googlecontrolplane"}, receivers)
+		assert.Equal(t, []any{"otlp/googlecontrolplane"}, receivers)
 	}
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -1160,7 +1166,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyDelimiterC
 		assert.False(t, conf.IsSet("receivers::"+slashRecID))
 		assert.False(t, conf.IsSet("receivers::"+underscoreRecID))
 		pipelineReceivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-		assert.Equal(t, []any{"nop/googlecontrolplane"}, pipelineReceivers)
+		assert.Equal(t, []any{"otlp/googlecontrolplane"}, pipelineReceivers)
 	}
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -1287,7 +1293,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_SilentNoOpOnNonWindow
 	assert.False(t, conf.IsSet("receivers::windowseventlog/"+windowseventlogsource.SanitizeChannelName("Application")))
 
 	receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-	assert.Equal(t, []any{"nop/googlecontrolplane"}, receivers)
+	assert.Equal(t, []any{"otlp/googlecontrolplane"}, receivers)
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -1751,7 +1757,7 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 	pipeSub, err := conf.Sub("service::pipelines::logs/googlecontrolplane")
 	require.NoError(t, err)
 	receivers := pipeSub.ToStringMap()["receivers"]
-	assert.Contains(t, receivers, "nop/googlecontrolplane")
+	assert.Contains(t, receivers, "otlp/googlecontrolplane")
 	assert.Contains(t, receivers, "filelog/googlecontrolplane")
 	assert.Contains(t, pipeSub.ToStringMap()["processors"], "googlepolicy")
 
@@ -2513,7 +2519,7 @@ func TestRetrieve_MultipleJournaldSourcePoliciesConsolidated(t *testing.T) {
 	pipelineReceivers, ok := logsPipeline["receivers"].([]any)
 	require.True(t, ok)
 	require.Contains(t, pipelineReceivers, "journald/googlecontrolplane")
-	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+	require.Contains(t, pipelineReceivers, "otlp/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -2594,7 +2600,7 @@ func TestRetrieve_MultipleJournaldSourcePolicies_FaultIsolation_FirstPolicyInval
 	pipelineReceivers, ok := logsPipeline["receivers"].([]any)
 	require.True(t, ok)
 	require.Contains(t, pipelineReceivers, "journald/googlecontrolplane")
-	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+	require.Contains(t, pipelineReceivers, "otlp/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -2704,7 +2710,7 @@ func TestRetrieve_ActivePolicySetWithHostMetricsSource(t *testing.T) {
 	metricReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
 	require.Contains(t, metricReceivers, "hostmetrics/googlecontrolplane")
-	require.Contains(t, metricReceivers, "nop/googlecontrolplane")
+	require.Contains(t, metricReceivers, "otlp/googlecontrolplane")
 
 	// Ensure logs and traces pipelines do not contain hostmetrics
 	logsPipeline, ok := pipelines["logs/googlecontrolplane"].(map[string]any)
@@ -2777,7 +2783,7 @@ func TestRetrieve_MultipleHostMetricsSourcePoliciesConsolidated(t *testing.T) {
 	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
 	require.Contains(t, pipelineReceivers, "hostmetrics/googlecontrolplane")
-	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+	require.Contains(t, pipelineReceivers, "otlp/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -2865,7 +2871,7 @@ func TestRetrieve_MultipleHostMetricsSourcePolicies_FaultIsolation_FirstPolicyIn
 	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
 	require.Contains(t, pipelineReceivers, "hostmetrics/googlecontrolplane")
-	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+	require.Contains(t, pipelineReceivers, "otlp/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -2922,7 +2928,7 @@ func TestRetrieve_ActivePolicySetWithIISSource_SynthesizesIISReceiver(t *testing
 		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
 		assert.NotContains(t, pipelineReceivers, "iis/googlecontrolplane")
 	}
-	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+	assert.Contains(t, pipelineReceivers, "otlp/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -2987,7 +2993,7 @@ func TestRetrieve_MultipleIISSourcePolicies_ConsolidatesMinInterval(t *testing.T
 		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
 		assert.NotContains(t, pipelineReceivers, "iis/googlecontrolplane")
 	}
-	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+	assert.Contains(t, pipelineReceivers, "otlp/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -3058,7 +3064,7 @@ func TestRetrieve_MultipleIISSourcePolicies_FaultIsolation_InvalidPolicyIgnored(
 		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
 		assert.NotContains(t, pipelineReceivers, "iis/googlecontrolplane")
 	}
-	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+	assert.Contains(t, pipelineReceivers, "otlp/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

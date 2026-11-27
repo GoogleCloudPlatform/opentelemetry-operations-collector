@@ -1,0 +1,85 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1;
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1;policyv1";
+
+// Enables raw UDP log collection, treating each UDP datagram (up to 64 KiB) as
+// a single log record and preserving the raw payload untouched in
+// `LogRecord.body` without format parsing. Content parsing (such as RFC
+// 3164/5424 syslog, CEF, LEEF, JSON, or key-value extraction) is handled
+// downstream by parse policies or server-side parsers.
+//
+// Policies are declarative, atomic, and transport-agnostic.
+//
+// Valid Policies:
+// - `id` is a non-empty, non-whitespace string identifying the policy within
+//   its configuration scope.
+// - `listen_address` is an explicit IP literal and port (`IPv4:port` or
+//   `[IPv6]:port`), where the IP is dotted-decimal IPv4 (no leading zeros) or
+//   bracketed IPv6 (no zone ID), and the port is a decimal integer in
+//   `[1, 65535]` (no leading zeros). Examples: `"127.0.0.1:1514"`,
+//   `"0.0.0.0:514"`, `"[::1]:1514"`, `"[::]:5514"`.
+// - On hosts with privileged-port restrictions (for example Linux ports below
+//   `net.ipv4.ip_unprivileged_port_start`, default `1024`), binding a
+//   privileged port requires the agent process to hold the necessary effective
+//   OS capability (`CAP_NET_BIND_SERVICE` on Linux while staying non-root).
+//
+// Invalid Policies (Rejected Atomically / Fail-Open):
+// - Empty or whitespace-only `id`.
+// - Empty `listen_address`, or any value containing whitespace or non-address
+//   characters.
+// - Bare ports (`":514"`), DNS hostnames (`"localhost:514"`), unbracketed
+//   IPv6 addresses (`"::1:514"`), or IPv6 zone IDs (`"[fe80::1%eth0]:514"`).
+// - Port `0`, out-of-range ports (`> 65535`), or leading zeros in IPv4 octets
+//   or port numbers (for example `"010.0.0.1:514"` or `"127.0.0.1:0514"`).
+// - Unknown protobuf fields (rejected atomically so future schema extensions
+//   are never applied partially).
+// - Privileged ports when the agent lacks permission to bind them. Agents
+//   should validate bind capability before applying a policy so an unbindable
+//   policy is rejected without disrupting other active listeners.
+//
+// Evaluation, Deduplication & Security Guardrails:
+// - Default Disposition: Raw UDP log collection is disabled unless at least one
+//   valid UdpLogSourcePolicy is configured.
+// - Order-Independent Deduplication: Multiple valid UdpLogSourcePolicy
+//   instances merge via the set union of canonical `listen_address` values
+//   (normalizing IPv6 formatting and unmapping IPv4-mapped IPv6 literals such
+//   as `[::ffff:127.0.0.1]:1514` to `127.0.0.1:1514`), opening one shared UDP
+//   listener per unique address.
+// - Source Metadata: Attaches OpenTelemetry semantic-convention network
+//   attributes (`network.transport`, `network.local.address`, `server.port`,
+//   `network.peer.address`, and `client.port`) without performing reverse DNS
+//   lookups so downstream filter, transform, and parse policies can match
+//   records by listen port or peer IP without DNS lookup latency.
+// - Plaintext & Network Isolation: UDP is connectionless and plaintext with no
+//   authentication, so any reachable sender can spoof source IPs. Prefer
+//   loopback (`127.0.0.1` / `[::1]`) for local forwarding, or restrict
+//   network/wildcard (`0.0.0.0` / `[::]`) ingress with host or VPC firewalls.
+//   Prefer an unprivileged port (`>= 1024`) directly or behind a load balancer
+//   when possible; when direct binding on a privileged port such as `514` is
+//   required on Linux, grant `CAP_NET_BIND_SERVICE` while staying non-root.
+message UdpLogSourcePolicy {
+  // Unique identifier for the policy within its configuration scope. Required;
+  // must be non-empty and non-whitespace.
+  string id = 1;
+
+  // Explicit IPv4 or bracketed IPv6 `IP:port` address to listen on over UDP
+  // (for example, `"127.0.0.1:1514"`, `"0.0.0.0:1514"`, or `"[::1]:1514"`).
+  // Required.
+  string listen_address = 2;
+}

@@ -266,8 +266,13 @@ func TestXDSPolicyManager_ReconnectsWithBackoff(t *testing.T) {
 	assert.Nil(t, ack.GetErrorDetail(), "a valid policy set must be ACKed, not NACKed")
 
 	// The manager must come back after each drop, reaching the third attempt.
+	// attemptCount increments as soon as the fake server opens a stream, but a
+	// request is only recorded once the client's first message on that stream
+	// is received. Wait for the third stream's initial request as well (initial
+	// 1, initial 2, ACK 2, initial 3) so the reconnect assertions below do not
+	// race with it and observe attempt 2's ACK instead.
 	require.Eventually(t, func() bool {
-		return srv.attemptCount() >= 3
+		return srv.attemptCount() >= 3 && len(srv.recordedRequests()) >= 4
 	}, 10*time.Second, 10*time.Millisecond, "manager did not reconnect after stream failures")
 
 	// The policy set from the dropped stream stays active across reconnects, so

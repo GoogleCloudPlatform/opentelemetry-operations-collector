@@ -174,7 +174,7 @@ func compileLogRecordFieldExtractor(field policyv1.LogRecordField) (LogTargetExt
 			}
 			tid := ctx.Record.TraceID()
 			if tid.IsEmpty() {
-				return nil, false
+				return "", false
 			}
 			return tid, true
 		}, nil
@@ -186,7 +186,7 @@ func compileLogRecordFieldExtractor(field policyv1.LogRecordField) (LogTargetExt
 			}
 			sid := ctx.Record.SpanID()
 			if sid.IsEmpty() {
-				return nil, false
+				return "", false
 			}
 			return sid, true
 		}, nil

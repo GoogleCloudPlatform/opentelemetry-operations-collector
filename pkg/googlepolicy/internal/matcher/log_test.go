@@ -256,5 +256,34 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 		val, ok = bodyExt(googlepolicy.LogContext{Record: lrInt})
 		assert.True(t, ok)
 		assert.Equal(t, int64(123), val)
+
+		// Empty trace_id and span_id on a non-zero LogRecord return ("", false),
+		// so existence is false while string predicates match "".
+		for _, field := range []policyv1.LogRecordField{
+			policyv1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
+			policyv1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID,
+		} {
+			target := &policyv1.LogFieldSelector{
+				Target: &policyv1.LogFieldSelector_RecordField{RecordField: field},
+			}
+			ext, err := CompileLogExtractor(target)
+			require.NoError(t, err)
+
+			val, ok := ext(emptyLoadedCtx)
+			assert.False(t, ok)
+			assert.Equal(t, "", val)
+
+			zeroVal, zeroOK := ext(googlepolicy.LogContext{})
+			assert.False(t, zeroOK)
+			assert.Nil(t, zeroVal)
+
+			eqEmpty, err := CompileLogMatcher(&policyv1.LogMatcher{
+				Target:    target,
+				Predicate: predEquals(strValue("")),
+			})
+			require.NoError(t, err)
+			assert.True(t, eqEmpty.Eval(emptyLoadedCtx))
+			assert.False(t, eqEmpty.Eval(googlepolicy.LogContext{}))
+		}
 	})
 }

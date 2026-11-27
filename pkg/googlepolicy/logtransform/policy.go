@@ -34,6 +34,9 @@ import (
 // PolicyType is the registered policy type identifier for log transform policies.
 const PolicyType = "log_transform"
 
+// DefaultRedactionReplacement is the replacement string used when LogRedaction.mask is unset.
+const DefaultRedactionReplacement = "[REDACTED]"
+
 // driver loads a LogTransformPolicy from either shape it can arrive in: the
 // proto a control plane sends, or the map an authored config decodes to.
 var driver = googlepolicy.ProtoDriver[*policyv1.LogTransformPolicy]{
@@ -66,6 +69,8 @@ var (
 	ErrMissingValue = matcher.ErrMissingValue
 	// ErrImmutableField is returned when an operation targets a read-only field (such as trace_id or span_id).
 	ErrImmutableField = errors.New("cannot mutate read-only field")
+	// ErrEmptyRedactRegex is returned when LogRedaction explicitly sets regex to "".
+	ErrEmptyRedactRegex = errors.New("redact regex cannot be empty; leave pattern unset for whole-field redaction")
 )
 
 type compiledAction func(ctx googlepolicy.LogContext) bool
@@ -637,17 +642,61 @@ func compileRedact(a *policyv1.LogRedaction) (compiledAction, error) {
 	if target.Target == nil {
 		return nil, ErrMissingTarget
 	}
-	var regex string
+
+	var (
+		isLogAttr     bool
+		isBodyField   bool
+		isRecordField bool
+		steps         []matcher.PathStep
+		recordField   policyv1.LogRecordField
+	)
+	switch t := target.Target.(type) {
+	case *policyv1.LogTargetSelector_LogAttributePath:
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
+		var err error
+		steps, err = matcher.CompilePath(t.LogAttributePath, "log")
+		if err != nil {
+			return nil, err
+		}
+		isLogAttr = true
+	case *policyv1.LogTargetSelector_BodyFieldPath:
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
+		var err error
+		steps, err = matcher.CompilePath(t.BodyFieldPath, "body")
+		if err != nil {
+			return nil, err
+		}
+		isBodyField = true
+	case *policyv1.LogTargetSelector_RecordField:
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
+		recordField = t.RecordField
+		isRecordField = true
+	default:
+		return nil, ErrMissingTarget
+	}
+
+	var (
+		hasRegex bool
+		regex    string
+	)
 	switch p := a.GetPattern().(type) {
 	case nil:
 	case *policyv1.LogRedaction_Regex:
-		if p != nil {
-			regex = p.Regex
+		if p == nil || p.Regex == "" {
+			return nil, ErrEmptyRedactRegex
 		}
+		hasRegex = true
+		regex = p.Regex
 	default:
 		return nil, fmt.Errorf("%w: %T", ErrUnsupportedAction, p)
 	}
-	var replacement string
+	replacement := DefaultRedactionReplacement
 	switch m := a.GetMask().(type) {
 	case nil:
 	case *policyv1.LogRedaction_Replacement:
@@ -662,39 +711,20 @@ func compileRedact(a *policyv1.LogRedaction) (compiledAction, error) {
 		return nil, err
 	}
 
-	switch t := target.Target.(type) {
-	case *policyv1.LogTargetSelector_LogAttributePath:
-		if t == nil {
-			return nil, ErrMissingTarget
-		}
-		steps, err := matcher.CompilePath(t.LogAttributePath, "log")
-		if err != nil {
-			return nil, err
-		}
+	switch {
+	case isLogAttr:
 		return func(ctx googlepolicy.LogContext) bool {
 			if ctx.Record == (plog.LogRecord{}) {
 				return false
 			}
 			val, ok := matcher.EvalPathValue(ctx.Record.Attributes(), steps)
-			if !ok || val.Type() != pcommon.ValueTypeStr {
+			if !ok {
 				return false
 			}
-			redacted, modified := redactStr(val.Str())
-			if !modified {
-				return false
-			}
-			val.SetStr(redacted)
-			return true
+			return redactAnyValue(val, hasRegex, redactStr, replacement)
 		}, nil
 
-	case *policyv1.LogTargetSelector_BodyFieldPath:
-		if t == nil {
-			return nil, ErrMissingTarget
-		}
-		steps, err := matcher.CompilePath(t.BodyFieldPath, "body")
-		if err != nil {
-			return nil, err
-		}
+	case isBodyField:
 		return func(ctx googlepolicy.LogContext) bool {
 			if ctx.Record == (plog.LogRecord{}) {
 				return false
@@ -704,29 +734,43 @@ func compileRedact(a *policyv1.LogRedaction) (compiledAction, error) {
 				return false
 			}
 			val, ok := matcher.EvalPathValue(body.Map(), steps)
-			if !ok || val.Type() != pcommon.ValueTypeStr {
+			if !ok {
 				return false
 			}
-			redacted, modified := redactStr(val.Str())
-			if !modified {
-				return false
-			}
-			val.SetStr(redacted)
-			return true
+			return redactAnyValue(val, hasRegex, redactStr, replacement)
 		}, nil
 
-	case *policyv1.LogTargetSelector_RecordField:
-		if t == nil {
-			return nil, ErrMissingTarget
-		}
-		return compileRecordFieldRedact(t.RecordField, redactStr)
+	case isRecordField:
+		return compileRecordFieldRedact(recordField, hasRegex, redactStr, replacement)
 
 	default:
 		return nil, ErrMissingTarget
 	}
 }
 
-func compileRecordFieldRedact(field policyv1.LogRecordField, redactStr func(string) (string, bool)) (compiledAction, error) {
+func redactAnyValue(val pcommon.Value, hasRegex bool, redactStr func(string) (string, bool), replacement string) bool {
+	if hasRegex {
+		if val.Type() != pcommon.ValueTypeStr {
+			return false
+		}
+		redacted, modified := redactStr(val.Str())
+		if !modified {
+			return false
+		}
+		val.SetStr(redacted)
+		return true
+	}
+	if val.Type() == pcommon.ValueTypeEmpty {
+		return false
+	}
+	if val.Type() == pcommon.ValueTypeStr && val.Str() == replacement {
+		return false
+	}
+	val.SetStr(replacement)
+	return true
+}
+
+func compileRecordFieldRedact(field policyv1.LogRecordField, hasRegex bool, redactStr func(string) (string, bool), replacement string) (compiledAction, error) {
 	switch field {
 	case policyv1.LogRecordField_LOG_RECORD_FIELD_BODY:
 		return func(ctx googlepolicy.LogContext) bool {
@@ -734,15 +778,10 @@ func compileRecordFieldRedact(field policyv1.LogRecordField, redactStr func(stri
 				return false
 			}
 			body := ctx.Record.Body()
-			if body.Type() != pcommon.ValueTypeStr || body.Str() == "" {
+			if !bodyExists(body) {
 				return false
 			}
-			redacted, modified := redactStr(body.Str())
-			if !modified {
-				return false
-			}
-			body.SetStr(redacted)
-			return true
+			return redactAnyValue(body, hasRegex, redactStr, replacement)
 		}, nil
 
 	case policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:

@@ -201,7 +201,7 @@ func TestPredicateEquals(t *testing.T) {
 		assert.False(t, pred([]byte{4, 5}, true))
 	})
 
-	t.Run("trace and span IDs match as hex string or raw bytes", func(t *testing.T) {
+	t.Run("trace and span IDs match as lowercase hex string only, not raw bytes", func(t *testing.T) {
 		traceID := pcommon.TraceID([16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
 		spanID := pcommon.SpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
@@ -209,13 +209,19 @@ func TestPredicateEquals(t *testing.T) {
 		assert.True(t, asString(traceID, true))
 
 		asBytes := mustCompile(t, predEquals(bytesValue(traceID[:])))
-		assert.True(t, asBytes(traceID, true))
+		assert.False(t, asBytes(traceID, true))
+
+		containsBytes := mustCompile(t, predContains(bytesValue([]byte{1, 2, 3})))
+		assert.False(t, containsBytes(traceID, true))
 
 		spanAsString := mustCompile(t, predEquals(strValue(spanID.String())))
 		assert.True(t, spanAsString(spanID, true))
 
 		spanAsBytes := mustCompile(t, predEquals(bytesValue(spanID[:])))
-		assert.True(t, spanAsBytes(spanID, true))
+		assert.False(t, spanAsBytes(spanID, true))
+
+		spanContainsBytes := mustCompile(t, predContains(bytesValue([]byte{1, 2, 3})))
+		assert.False(t, spanContainsBytes(spanID, true))
 	})
 }
 
@@ -545,7 +551,7 @@ func TestCompilePathSetter(t *testing.T) {
 		got, _ = EvalPath(attrs, steps)
 		assert.Equal(t, "LAKEHOUSE_ARCHIVE", got)
 
-		// Intermediate key is a non-map scalar: upsert=false leaves scalar intact, upsert=true replaces with map
+		// Intermediate key is a non-map scalar: both upsert=false and upsert=true fail open and leave scalar intact
 		attrs.PutStr("scalar_parent", "keep_me")
 		conflictPath := &policyv1.AttributePath{Segments: []string{"scalar_parent", "child"}}
 		noClobber, err := CompilePathSetter(conflictPath, "log", strValue("v"), false)
@@ -554,14 +560,23 @@ func TestCompilePathSetter(t *testing.T) {
 		sp, _ := attrs.Get("scalar_parent")
 		assert.Equal(t, "keep_me", sp.Str())
 
-		clobber, err := CompilePathSetter(conflictPath, "log", strValue("v"), true)
+		upsertNoClobber, err := CompilePathSetter(conflictPath, "log", strValue("v"), true)
 		require.NoError(t, err)
-		assert.True(t, clobber(attrs))
+		assert.False(t, upsertNoClobber(attrs))
 		sp, _ = attrs.Get("scalar_parent")
-		require.Equal(t, pcommon.ValueTypeMap, sp.Type())
-		child, ok := sp.Map().Get("child")
+		require.Equal(t, pcommon.ValueTypeStr, sp.Type())
+		assert.Equal(t, "keep_me", sp.Str())
+
+		// Deeper non-map intermediate (map -> slice -> leaf) also fails open with upsert=true
+		attrs.PutEmptyMap("deep").PutEmptySlice("arr").AppendEmpty().SetStr("elem")
+		deepConflict := &policyv1.AttributePath{Segments: []string{"deep", "arr", "leaf"}}
+		deepUpsert, err := CompilePathSetter(deepConflict, "log", strValue("v"), true)
+		require.NoError(t, err)
+		assert.False(t, deepUpsert(attrs))
+		deepMap, _ := attrs.Get("deep")
+		arrVal, ok := deepMap.Map().Get("arr")
 		require.True(t, ok)
-		assert.Equal(t, "v", child.Str())
+		assert.Equal(t, pcommon.ValueTypeSlice, arrVal.Type())
 	})
 }
 
@@ -692,7 +707,7 @@ func TestCompilePathValueSetter(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, int64(100), leaf.Int())
 
-	// Obstructed intermediate (scalar ancestor) with upsert=false should fail without modifying.
+	// Obstructed intermediate (scalar ancestor) fails open for both upsert=false and upsert=true.
 	attrs.PutStr("scalar", "blocked")
 	blockedPath := &policyv1.AttributePath{Segments: []string{"scalar", "child"}}
 	setBlocked, err := CompilePathValueSetter(blockedPath, "log", false)
@@ -700,6 +715,14 @@ func TestCompilePathValueSetter(t *testing.T) {
 	assert.False(t, setBlocked(attrs, pcommon.NewValueStr("val")))
 	v, ok = attrs.Get("scalar")
 	assert.True(t, ok)
+	assert.Equal(t, "blocked", v.Str())
+
+	setBlockedUpsert, err := CompilePathValueSetter(blockedPath, "log", true)
+	require.NoError(t, err)
+	assert.False(t, setBlockedUpsert(attrs, pcommon.NewValueStr("val")))
+	v, ok = attrs.Get("scalar")
+	assert.True(t, ok)
+	assert.Equal(t, pcommon.ValueTypeStr, v.Type())
 	assert.Equal(t, "blocked", v.Str())
 }
 
